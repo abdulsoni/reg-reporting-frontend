@@ -6,9 +6,9 @@ import {
   ArrowRight,
   CheckCircle2,
   Download,
-  GitBranch,
   RefreshCw,
 } from "lucide-react";
+import { LineageHeader } from "../components/LineageHeader";
 
 type HopStatus = "proven" | "code-derived";
 
@@ -353,49 +353,7 @@ export function LineageEvidence() {
 
   return (
     <div className="min-h-screen bg-[#f4f2ed] text-[#202925]">
-      {/* Header — deliberately mirrors TraceProgressPanel */}
-      <header className="bg-[#1a2332] text-white">
-        <div className="mx-auto flex h-14 max-w-[1500px] items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10">
-              <GitBranch size={16} />
-            </div>
-            <span className="text-sm font-bold tracking-tight">Lineage Tracer</span>
-            <span className="rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider">
-              POC
-            </span>
-          </div>
-
-          <nav className="hidden items-center gap-1 md:flex">
-            {[
-              { n: 1, label: "Initiate trace", active: false },
-              { n: 2, label: "Trace progress", active: false },
-              { n: 3, label: "Lineage and evidence", active: true },
-            ].map((step) => (
-              <button
-                key={step.n}
-                type="button"
-                className={[
-                  "flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold",
-                  step.active
-                    ? "bg-white/15 text-white"
-                    : "text-white/50 hover:text-white/80",
-                ].join(" ")}
-              >
-                <span
-                  className={[
-                    "flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold",
-                    step.active ? "bg-white text-[#1a2332]" : "bg-white/20",
-                  ].join(" ")}
-                >
-                  {step.n}
-                </span>
-                {step.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </header>
+      <LineageHeader activeStep={3} />
 
       <main className="mx-auto max-w-[1500px] p-4 sm:p-6 lg:p-8">
         {/* Page title */}

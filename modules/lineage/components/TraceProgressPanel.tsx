@@ -1,7 +1,28 @@
 "use client";
 
-import { useState } from "react";
-import { CheckCircle2, Clock } from "lucide-react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import {
+  CheckCircle2,
+  Clock,
+  GitBranch,
+  Loader2,
+} from "lucide-react";
+
+
+import {
+  getReverseLineage,
+  ReverseLineageRequest,
+} from "../services/lineageApi";
+
+import { ReverseLineageResponse } from "../types/trace";
+
+const actions = [
+  "Connect",
+  "Locate attribute",
+  "Identify source",
+  "Identify consumers",
+];
 
 const systems = [
   { n: 1, system: "reporting_db", heldIn: "rpt.c0700_facts.value", sourcedFrom: "calc_sa_exposure.exposure_value", consumedBy: "XBRL writer + COREP v1", status: "identified" },
@@ -16,159 +37,325 @@ const systems = [
   { n: 10, system: "loans_db", heldIn: "–", sourcedFrom: "–", consumedBy: "–", status: "connection_required" },
 ];
 
-const actions = ["Connect", "Locate attribute", "Identify source", "Identify consumers"];
-
 export function TraceProgressPanel() {
+  const router = useRouter();
+
   const [activeAction, setActiveAction] = useState("Connect");
 
+  const [traceData, setTraceData] =
+    useState<ReverseLineageResponse | null>(null);
+
+  const [loading, setLoading] = useState(true);
+
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    async function loadLineage() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const payload: ReverseLineageRequest = {
+          report_name: "COREP C90 Report",
+          db_type: "sqlite",
+          database: "lineage.db",
+        };
+
+        const response = await getReverseLineage(payload);
+
+        setTraceData(response);
+      } catch (err) {
+        console.error("Failed to load reverse lineage:", err);
+
+        if (err instanceof Error) {
+          setError(err.message);
+        } else {
+          setError("Failed to load reverse lineage.");
+        }
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    loadLineage();
+  }, []);
+
+  const handleConnectNextSource = () => {
+    if (!traceData?.next_source?.connection_required) {
+      router.push("/lineage/evidence");
+      return;
+    }
+
+    // Later we will open the database connection flow here.
+    router.push("/lineage");
+  };
+
   return (
-    <div className="min-h-screen bg-[#f4f2ed]">
-      {/* Dark navy header */}
-      <header className="bg-[#1a2332] text-white">
-        <div className="mx-auto flex h-14 max-w-[1500px] items-center justify-between px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-white/10">
-              <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-            </div>
-            <span className="text-sm font-bold tracking-tight">
-              Lineage Tracer
-            </span>
-            <span className="rounded bg-white/15 px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wider">
-              POC
-            </span>
-          </div>
 
-          <nav className="hidden items-center gap-1 md:flex">
-            {[
-              { n: 1, label: "Initiate trace", active: false },
-              { n: 2, label: "Trace progress", active: true },
-              { n: 3, label: "Lineage and evidence", active: false },
-            ].map((step) => (
-              <button
-                key={step.n}
-                className={`flex items-center gap-1.5 rounded-md px-3 py-1.5 text-[11px] font-semibold transition ${
-                  step.active
-                    ? "bg-white/15 text-white"
-                    : "text-white/50 hover:text-white/80"
-                }`}
-              >
-                <span
-                  className={`flex h-4 w-4 items-center justify-center rounded-full text-[9px] font-bold ${
-                    step.active ? "bg-white text-[#1a2332]" : "bg-white/20"
-                  }`}
-                >
-                  {step.n}
-                </span>
-                {step.label}
-              </button>
-            ))}
-          </nav>
-        </div>
-      </header>
-
-      {/* Main content */}
       <main className="mx-auto max-w-[1500px] p-4 sm:p-6 lg:p-8">
-        {/* Title + stats */}
+
+        {/* Title */}
         <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+
           <div>
+
             <h1 className="text-lg font-bold tracking-tight text-ink sm:text-xl">
               Reverse lineage in progress
             </h1>
+
             <p className="mt-1 text-xs text-slate-500">
-              Reverse · C 07.00 · Corporates · r0010 c0200 · 1,240.5 EUR m · 30-Jun-2026
+              Reverse ·{" "}
+              {traceData?.report_name ?? "Loading report..."} ·{" "}
+              {traceData?.source_object ?? "Loading source..."}
             </p>
+
           </div>
 
           {/* Stats */}
           <div className="flex items-start gap-6">
+
             <div className="text-center">
-              <div className="text-lg font-bold text-ink">5</div>
-              <div className="text-[10px] text-slate-500">systems connected</div>
+
+              <div className="text-lg font-bold text-ink">
+                {loading ? (
+                  <Loader2
+                    size={18}
+                    className="animate-spin"
+                  />
+                ) : (
+                  traceData?.systems_connected ?? 0
+                )}
+              </div>
+
+              <div className="text-[10px] text-slate-500">
+                systems connected
+              </div>
+
             </div>
+
             <div className="text-center">
-              <div className="text-lg font-bold text-ink">2 of 3</div>
-              <div className="text-[10px] text-slate-500">systems of record reached</div>
+
+              <div className="text-lg font-bold text-ink">
+                {loading
+                  ? "-"
+                  : traceData?.systems_of_record_reached ?? 0}
+              </div>
+
+              <div className="text-[10px] text-slate-500">
+                systems of record reached
+              </div>
+
             </div>
+
             <div className="text-center">
-              <div className="text-lg font-bold text-ink">1</div>
-              <div className="text-[10px] text-slate-500">branch outstanding</div>
+
+              <div className="text-lg font-bold text-ink">
+                {loading
+                  ? "-"
+                  : traceData?.branch_outstanding ?? 0}
+              </div>
+
+              <div className="text-[10px] text-slate-500">
+                branch outstanding
+              </div>
+
             </div>
+
           </div>
         </div>
 
+        {/* Error */}
+        {error && (
+          <div className="mb-5 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-[11px] text-red-700">
+            {error}
+          </div>
+        )}
+
+        {/* Content */}
         <div className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]">
+
           {/* Systems table */}
           <div className="panel overflow-hidden">
-            {/* Table */}
+
             <div className="overflow-x-auto">
+
               <table className="w-full min-w-[700px] border-collapse text-[11px]">
+
                 <thead>
+
                   <tr className="border-b border-slate-200 bg-slate-50">
-                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">#</th>
-                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">System</th>
-                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">Attribute held in</th>
-                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">Sourced from</th>
-                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">Consumed by</th>
-                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">Status</th>
+
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      #
+                    </th>
+
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      System
+                    </th>
+
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      Attribute Name
+                    </th>
+                     <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      Table Name
+                    </th>
+                     <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      Transformation
+                    </th>
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      Sourced from
+                    </th>
+
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      Consumed by
+                    </th>
+
+                    <th className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500">
+                      Status
+                    </th>
+
                   </tr>
+
                 </thead>
+
                 <tbody>
-                  {systems.map((row) => (
-                    <tr
-                      key={row.n}
-                      className={`border-b border-slate-100 last:border-0 ${
-                        row.status === "connection_required" ? "bg-amber-50" : ""
-                      }`}
-                    >
-                      <td className="px-3 py-2.5 text-slate-500">{row.n}</td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] font-semibold text-ink">
-                        {row.system}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-slate-600">
-                        {row.heldIn}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-slate-600">
-                        {row.sourcedFrom}
-                      </td>
-                      <td className="px-3 py-2.5 font-mono text-[10px] text-slate-600">
-                        {row.consumedBy}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        {row.status === "identified" ? (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
-                            <CheckCircle2 size={10} />
-                            Identified
-                          </span>
-                        ) : (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
-                            <Clock size={10} />
-                            Connection required
-                          </span>
-                        )}
+
+                  {loading ? (
+
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="px-4 py-12 text-center"
+                      >
+                        <div className="flex items-center justify-center gap-2 text-[11px] text-slate-500">
+
+                          <Loader2
+                            size={15}
+                            className="animate-spin"
+                          />
+
+                          Discovering reverse lineage...
+                        </div>
                       </td>
                     </tr>
-                  ))}
+
+                  ) : traceData?.rows?.length ? (
+
+                    traceData.rows.map((row, index) => (
+
+                      <tr
+                        key={`${row.system}-${row.attribute_held_in}-${index}`}
+                        className={`border-b border-slate-100 last:border-0 ${
+                          row.status.toLowerCase() ===
+                          "connection required"
+                            ? "bg-amber-50"
+                            : ""
+                        }`}
+                      >
+
+                        <td className="px-3 py-2.5 text-slate-500">
+                          {index + 1}
+                        </td>
+
+                        <td className="px-3 py-2.5 font-mono text-[10px] font-semibold text-ink">
+                          {row.system}
+                        </td>
+
+                        <td className="px-3 py-2.5 font-mono text-[10px] text-slate-600">
+                          {row.attribute_held_in}
+                        </td>
+
+                        <td className="px-3 py-2.5 font-mono text-[10px] text-slate-600">
+                          {row.sourced_from}
+                        </td>
+
+                        <td className="px-3 py-2.5 font-mono text-[10px] text-slate-600">
+                          {row.consumed_by}
+                        </td>
+
+                        <td className="px-3 py-2.5">
+
+                          {row.status.toLowerCase() ===
+                          "identified" ? (
+
+                            <span className="inline-flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-0.5 text-[10px] font-semibold text-emerald-700">
+
+                              <CheckCircle2 size={10} />
+
+                              Identified
+
+                            </span>
+
+                          ) : (
+
+                            <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-800">
+
+                              <Clock size={10} />
+
+                              {row.status}
+
+                            </span>
+
+                          )}
+
+                        </td>
+
+                      </tr>
+
+                    ))
+
+                  ) : (
+
+                    <tr>
+
+                      <td
+                        colSpan={6}
+                        className="px-4 py-12 text-center text-[11px] text-slate-500"
+                      >
+                        No lineage information found.
+                      </td>
+
+                    </tr>
+
+                  )}
+
                 </tbody>
+
               </table>
+
             </div>
 
-            {/* Footer note */}
+            {/* Footer */}
             <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
+
               <p className="text-[10px] text-slate-500">
-                One row per system connected, in the order traced. Row 1 is the report source system identified by the user.
+
+                {traceData?.rows?.length
+                  ? `${traceData.rows.length} lineage ${
+                      traceData.rows.length === 1
+                        ? "record"
+                        : "records"
+                    } identified.`
+                  : "No lineage records identified."}
+
               </p>
+
             </div>
+
           </div>
 
-          {/* Next source identification */}
+          {/* Next source */}
           <div className="panel flex flex-col p-5">
+
             <h2 className="text-[10px] font-bold uppercase tracking-wider text-slate-500">
               Next source identification
             </h2>
 
-            {/* Action buttons */}
+            {/* Actions */}
             <div className="mt-3 flex flex-wrap gap-1.5">
+
               {actions.map((action) => (
+
                 <button
                   key={action}
                   onClick={() => setActiveAction(action)}
@@ -180,10 +367,14 @@ export function TraceProgressPanel() {
                 >
                   {action}
                 </button>
+
               ))}
+
             </div>
 
-            {/* Description */}
+      
+            
+              
             <p className="mt-4 text-[11px] leading-5 text-slate-600">
               stg_facilities.drawn_balance is sourced from{" "}
               <span className="font-mono font-semibold text-ink">los.facility</span> on{" "}
@@ -236,9 +427,11 @@ export function TraceProgressPanel() {
                 </button>
               </div>
             </form>
+
           </div>
+
         </div>
+
       </main>
-    </div>
   );
 }
