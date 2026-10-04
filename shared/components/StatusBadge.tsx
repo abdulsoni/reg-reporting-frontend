@@ -1,5 +1,5 @@
 import { cn } from "@/shared/utils/cn";
-import type { ReportStatus } from "@/shared/types/report";
+import { ReportStatus } from "../types/report";
 
 export function StatusBadge({
   status,
