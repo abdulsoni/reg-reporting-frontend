@@ -26,17 +26,7 @@ export function SourceSystemPanel({
     error,
   } = useDatabaseConnection();
 
-  const {
-    reports,
-
-    selectedReportId,
-
-    selectedReport,
-
-    setSelectedReportId,
-  } = useReports();
-
-  // console.log('selectedReport',selectedReport)
+  const { selectedReport } = useReports();
 
   const handleConnect = async (
     event: React.FormEvent<HTMLFormElement>,

@@ -1,10 +1,1 @@
-export { LineagePage } from "./pages/LineagePage";
-export { RegulatoryReportPanel } from "./components/RegulatoryReportPanel";
-export { DataPointPanel } from "./components/DataPointPanel";
-export { SourceSystemPanel } from "./components/SourceSystemPanel";
-export { TraceProgressPanel } from "./components/TraceProgressPanel";
-export { TemplateTable } from "./components/TemplateTable";
-export { SideInsights } from "./components/SideInsights";
-export { ReportFilters } from "./components/ReportFilters";
-// export { templates } from "./data/templates";
-// export type { Template } from "@/shared/types/report";
+export { getReverseLineage } from "./services/lineageApi";

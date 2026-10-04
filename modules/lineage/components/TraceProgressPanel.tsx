@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { CheckCircle2, AlertCircle, Clock } from "lucide-react";
+import { CheckCircle2, Clock } from "lucide-react";
 
 const systems = [
   { n: 1, system: "reporting_db", heldIn: "rpt.c0700_facts.value", sourcedFrom: "calc_sa_exposure.exposure_value", consumedBy: "XBRL writer + COREP v1", status: "identified" },
