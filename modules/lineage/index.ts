@@ -6,5 +6,5 @@ export { TraceProgressPanel } from "./components/TraceProgressPanel";
 export { TemplateTable } from "./components/TemplateTable";
 export { SideInsights } from "./components/SideInsights";
 export { ReportFilters } from "./components/ReportFilters";
-export { templates } from "./data/templates";
-export type { Template } from "@/shared/types/report";
+// export { templates } from "./data/templates";
+// export type { Template } from "@/shared/types/report";

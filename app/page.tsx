@@ -1,5 +1,5 @@
-import { LineagePage } from "@/modules/lineage";
+import { redirect } from "next/navigation";
 
 export default function Home() {
-  return <LineagePage />;
+  redirect("/lineage")
 }
