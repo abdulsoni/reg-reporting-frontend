@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@layer base {
+  @import "@xyflow/react/dist/style.css";
+}
+
 @theme {
   --color-line: #e2e8f0;
   --color-ink: #132238;

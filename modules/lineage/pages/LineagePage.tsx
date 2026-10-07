@@ -7,7 +7,6 @@ import { RegulatoryReportPanel } from "../components/RegulatoryReportPanel";
 import { DataPointPanel } from "../components/DataPointPanel";
 import { SourceSystemPanel } from "../components/SourceSystemPanel";
 import { LineageHeader } from "../components/LineageHeader";
-import { ReportProvider } from "../context/ReportContext";
 
 export function LineagePage() {
   const router = useRouter();
@@ -60,13 +59,11 @@ export function LineagePage() {
 
         {/* 3-column panels */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_2fr_1fr]">
-          <ReportProvider>
-            <RegulatoryReportPanel />
-            <DataPointPanel />
-            <SourceSystemPanel
-              onConnect={() => router.push("/lineage/trace-progress")}
-            />
-          </ReportProvider>
+          <RegulatoryReportPanel />
+          <DataPointPanel />
+          <SourceSystemPanel
+            onConnect={() => router.push("/lineage/trace-progress")}
+          />
         </div>
       </main>
     </div>

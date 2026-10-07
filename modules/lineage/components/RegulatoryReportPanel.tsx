@@ -106,12 +106,6 @@ export function RegulatoryReportPanel() {
       }
 
 
-      console.log(
-        "Upload response:",
-        response
-      );
-
-
       /*
        * Convert API response into
        * our local RegulatoryReport object.
