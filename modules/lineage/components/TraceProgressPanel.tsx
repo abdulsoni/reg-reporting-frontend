@@ -2,9 +2,11 @@
 
 import { CheckCircle2, Clock, Loader2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
+import { useEffect, useRef, useState } from "react";
 
 import { useLineage } from "../context/LineageContext";
-import { NextSourceCard, TraceError } from "./NextSourceCard";
+import { TraceError } from "./NextSourceCard";
+import { SourceSystemPanel } from "./SourceSystemPanel";
 import type { HopStatus, LineageHop } from "../types/lineage";
 
 const COLUMNS = [
@@ -107,16 +109,77 @@ export function TraceProgressPanel() {
     traceId,
     hops,
     phase,
-    nextSource,
     connectedSystems,
     needsConnection,
     isComplete,
     isLoop,
     busy,
     error,
-    connectNextSource,
     resetTrace,
   } = useLineage();
+
+  /*
+   * Every connection appends its newly discovered hops as a separate
+   * lineage section:
+   *
+   * [
+   *   hops discovered before the first connection,
+   *   hops discovered after connecting crm.db,
+   *   hops discovered after connecting sales.db
+   * ]
+   */
+  const [sections, setSections] = useState<LineageHop[][]>([]);
+
+  /*
+   * How many hops have already been assigned to a section, so only the
+   * growth of the context's hop list ever becomes a new section.
+   */
+  const [assigned, setAssigned] = useState(0);
+
+  /*
+   * Reference to the latest section.
+   *
+   * Used to automatically scroll to the newly
+   * fetched lineage section.
+   */
+  const bottomRef = useRef<HTMLDivElement | null>(null);
+
+  /*
+   * Slice the hop list into sections. The context replaces the whole list
+   * on every refresh, so whatever arrived since the last assignment becomes
+   * the next section. Derived while rendering (React's previous-state
+   * pattern) rather than in an effect, and a reset empties the list to
+   * start over.
+   */
+  if (hops.length !== assigned) {
+    if (hops.length === 0) {
+      setAssigned(0);
+      setSections([]);
+    } else if (hops.length > assigned) {
+      const added = hops.slice(assigned);
+
+      setAssigned(hops.length);
+      setSections((previous) => [...previous, added]);
+    } else {
+      /* The trace shrank below what the sections already cover. */
+      setAssigned(hops.length);
+      setSections([hops]);
+    }
+  }
+
+  /*
+   * Scroll to the newly added section.
+   *
+   * Do not scroll on the initial section.
+   */
+  useEffect(() => {
+    if (sections.length > 1) {
+      bottomRef.current?.scrollIntoView({
+        behavior: "smooth",
+        block: "start",
+      });
+    }
+  }, [sections.length]);
 
   if (!traceId) {
     return (
@@ -142,6 +205,12 @@ export function TraceProgressPanel() {
   const sourceReached = hops.filter(
     (hop) => hop.status === "SOURCE_REACHED"
   ).length;
+
+  /*
+   * Before the first hop arrives there is still nothing to section, so a
+   * single empty placeholder keeps the table + connect card layout visible.
+   */
+  const renderedSections = sections.length > 0 ? sections : [[]];
 
   return (
     <div className="flex flex-col gap-4">
@@ -191,59 +260,98 @@ export function TraceProgressPanel() {
 
       <TraceError error={error} />
 
-      {/* Connect gate */}
-      {needsConnection && (
-        <NextSourceCard
-          nextSource={nextSource}
-          connectedSystems={connectedSystems}
-          busy={busy}
-          onConnect={connectNextSource}
-        />
-      )}
+      {/* Lineage sections */}
+      <div className="space-y-5">
+        {renderedSections.map((sectionHops, sectionIndex) => {
+          const isLastSection = sectionIndex === renderedSections.length - 1;
 
-      {/* Hop table */}
-      <section className="panel overflow-hidden p-0">
-        <div className="border-b border-slate-200 px-5 py-3.5">
-          <h3 className="text-xs font-bold text-ink">Discovered hops</h3>
-        </div>
+          return (
+            <div
+              key={`section-${sectionIndex}`}
+              ref={isLastSection ? bottomRef : undefined}
+              className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]"
+            >
+              {/* Hops table */}
+              <section className="panel overflow-hidden p-0">
+                <div className="border-b border-slate-200 px-5 py-3.5">
+                  <h3 className="text-xs font-bold text-ink">
+                    {sectionIndex === 0
+                      ? "Discovered hops"
+                      : `Lineage section ${sectionIndex + 1}`}
+                  </h3>
+                </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[1100px] border-collapse text-[11px]">
-            <thead>
-              <tr className="border-b border-slate-200 bg-slate-50">
-                {COLUMNS.map((column) => (
-                  <th
-                    key={column}
-                    className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500"
-                  >
-                    {column}
-                  </th>
-                ))}
-              </tr>
-            </thead>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1100px] border-collapse text-[11px]">
+                    <thead>
+                      <tr className="border-b border-slate-200 bg-slate-50">
+                        {COLUMNS.map((column) => (
+                          <th
+                            key={column}
+                            className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500"
+                          >
+                            {column}
+                          </th>
+                        ))}
+                      </tr>
+                    </thead>
 
-            <tbody>
-              {hops.length === 0 ? (
-                <tr>
-                  <td
-                    colSpan={COLUMN_COUNT}
-                    className="px-3 py-10 text-center text-[11px] text-slate-500"
-                  >
-                    {busy ? "Exploring metadata…" : "No hops discovered yet."}
-                  </td>
-                </tr>
-              ) : (
-                hops.map((hop) => (
-                  <HopRow
-                    key={`${hop.system}-${hop.table_name}-${hop.attribute_name}`}
-                    hop={hop}
-                  />
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
+                    <tbody>
+                      {sectionHops.length === 0 ? (
+                        <tr>
+                          <td
+                            colSpan={COLUMN_COUNT}
+                            className="px-3 py-10 text-center text-[11px] text-slate-500"
+                          >
+                            {busy
+                              ? "Exploring metadata…"
+                              : "No hops discovered yet."}
+                          </td>
+                        </tr>
+                      ) : (
+                        sectionHops.map((hop) => (
+                          <HopRow
+                            key={`${sectionIndex}-${hop.hop}`}
+                            hop={hop}
+                          />
+                        ))
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Footer */}
+                <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
+                  <p className="text-[10px] text-slate-500">
+                    {sectionHops.length
+                      ? `${sectionHops.length} lineage ${
+                          sectionHops.length === 1 ? "record" : "records"
+                        } identified.`
+                      : "No lineage records identified."}
+                  </p>
+                </div>
+              </section>
+
+              {/* Next source */}
+              <div className="panel flex flex-col p-5">
+                <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                  Next source identification
+                </h2>
+
+                <SourceSystemPanel mode="connect" hideTitle />
+              </div>
+            </div>
+          );
+        })}
+
+        {/* Loading new hop */}
+        {busy && !isComplete && (
+          <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-slate-500">
+            <Loader2 size={15} className="animate-spin" />
+            Continuing reverse lineage...
+          </div>
+        )}
+      </div>
 
       {/* Footer actions */}
       <div className="flex items-center justify-between gap-3">

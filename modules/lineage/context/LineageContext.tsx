@@ -13,20 +13,29 @@ import { parseSourceReference } from "../utils/sourceReference";
 import type { SourceReference } from "../utils/sourceReference";
 import type { Datapoint } from "../types/report";
 import type {
+  ConnectResponse,
   LineageGraph,
   LineageHop,
   NextSource,
-  SystemDescriptor,
   TraceStatus,
   TraceSummary,
 } from "../types/lineage";
 
 export type LineagePhase = "IDLE" | "RUNNING" | TraceStatus;
 
+/** The identity the backend resolved for an established connection. */
+type Connection = Pick<ConnectResponse, "system" | "db_type" | "database">;
+
 type BeginTraceInput = {
   reportId: string;
   datapoint: Datapoint;
-  system: SystemDescriptor;
+  dbType: string;
+  database: string;
+};
+
+type ConnectionInput = {
+  dbType: string;
+  database: string;
 };
 
 interface LineageContextValue {
@@ -41,6 +50,7 @@ interface LineageContextValue {
   graph: LineageGraph | null;
   nextSource: NextSource | null;
   connectedSystems: string[];
+  connection: Connection | null;
   currentSystem: string | null;
   busy: boolean;
   error: string | null;
@@ -52,7 +62,7 @@ interface LineageContextValue {
 
   /* Actions */
   beginTrace: (input: BeginTraceInput) => Promise<boolean>;
-  connectNextSource: (system: SystemDescriptor) => Promise<boolean>;
+  connectNextSource: (connection: ConnectionInput) => Promise<boolean>;
   refreshTrace: () => Promise<void>;
   resetTrace: () => void;
   clearError: () => void;
@@ -110,6 +120,7 @@ export function LineageProvider({ children }: { children: React.ReactNode }) {
   const [graph, setGraph] = useState<LineageGraph | null>(null);
   const [nextSource, setNextSource] = useState<NextSource | null>(null);
   const [connectedSystems, setConnectedSystems] = useState<string[]>([]);
+  const [connection, setConnection] = useState<Connection | null>(null);
   const [currentSystem, setCurrentSystem] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -124,9 +135,11 @@ export function LineageProvider({ children }: { children: React.ReactNode }) {
     setGraph(graphData);
   }, []);
 
-  const addConnected = useCallback((system: string) => {
+  /* Connections are tracked by their database so the panels can tell a
+   * database that is already connected from one that still has to be. */
+  const addConnected = useCallback((connection: string) => {
     setConnectedSystems((previous) =>
-      previous.includes(system) ? previous : [...previous, system]
+      previous.includes(connection) ? previous : [...previous, connection]
     );
   }, []);
 
@@ -141,20 +154,23 @@ export function LineageProvider({ children }: { children: React.ReactNode }) {
   );
 
   const beginTrace = useCallback(
-    async ({ reportId, datapoint, system }: BeginTraceInput) => {
+    async ({ reportId, datapoint, dbType, database }: BeginTraceInput) => {
       setBusy(true);
       setError(null);
 
       try {
-        await lineageApi.connectSystem({
-          system: system.name,
-          db_type: system.db_type,
-          database: system.database_file,
+        const connected = await lineageApi.connectSystem({
+          db_type: dbType,
+          database,
         });
 
+        setConnection(connected);
+
         const summary = await lineageApi.startTrace({
-          system: system.name,
           datapoint_id: datapoint.id,
+          system: connected.system,
+          db_type: connected.db_type,
+          database: connected.database,
           report_id: reportId,
         });
 
@@ -162,7 +178,7 @@ export function LineageProvider({ children }: { children: React.ReactNode }) {
         setReportId(reportId);
 
         applySummary(summary);
-        addConnected(system.name);
+        addConnected(connected.database);
 
         await pullArtifacts(summary.trace_id);
 
@@ -180,18 +196,19 @@ export function LineageProvider({ children }: { children: React.ReactNode }) {
   );
 
   const connectNextSource = useCallback(
-    async (system: SystemDescriptor) => {
+    async ({ dbType, database }: ConnectionInput) => {
       if (!traceId || !datapointId || !reportId) return false;
 
       setBusy(true);
       setError(null);
 
       try {
-        await lineageApi.connectSystem({
-          system: system.name,
-          db_type: system.db_type,
-          database: system.database_file,
+        const connected = await lineageApi.connectSystem({
+          db_type: dbType,
+          database,
         });
+
+        setConnection(connected);
 
         /*
          * GET /lineage/trace only replays the hops already stored, so the walk
@@ -199,14 +216,16 @@ export function LineageProvider({ children }: { children: React.ReactNode }) {
          * connection just unblocked.
          */
         const summary = await lineageApi.startTrace({
-          system: system.name,
           datapoint_id: datapointId,
+          system: connected.system,
+          db_type: connected.db_type,
+          database: connected.database,
           report_id: reportId,
           trace_id: traceId,
         });
 
         applySummary(summary);
-        addConnected(system.name);
+        addConnected(connected.database);
 
         await pullArtifacts(traceId);
 
@@ -242,6 +261,7 @@ export function LineageProvider({ children }: { children: React.ReactNode }) {
     setGraph(null);
     setNextSource(null);
     setConnectedSystems([]);
+    setConnection(null);
     setCurrentSystem(null);
     setError(null);
   }, []);
@@ -261,6 +281,7 @@ export function LineageProvider({ children }: { children: React.ReactNode }) {
       graph,
       nextSource,
       connectedSystems,
+      connection,
       currentSystem,
       busy,
       error,
@@ -281,6 +302,7 @@ export function LineageProvider({ children }: { children: React.ReactNode }) {
     busy,
     clearError,
     connectedSystems,
+    connection,
     connectNextSource,
     currentSystem,
     error,

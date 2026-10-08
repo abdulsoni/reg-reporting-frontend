@@ -22,15 +22,41 @@ type HopMeta = {
 };
 
 export const SYSTEMS: SystemDescriptor[] = [
-  { name: "reporting_db", db_type: "sqlite", database: "reporting_db.sqlite" },
-  { name: "sa_engine", db_type: "sqlite", database: "sa_engine.sqlite" },
-  { name: "dwh", db_type: "sqlite", database: "dwh.sqlite" },
-  { name: "staging", db_type: "sqlite", database: "staging.sqlite" },
-  { name: "loans_db", db_type: "sqlite", database: "loans_db.sqlite" },
+  {
+    name: "reporting_db",
+    db_type: "sqlite",
+    database: "reporting_db.sqlite",
+    database_file: "reporting_db.sqlite",
+  },
+  {
+    name: "sa_engine",
+    db_type: "sqlite",
+    database: "sa_engine.sqlite",
+    database_file: "sa_engine.sqlite",
+  },
+  {
+    name: "dwh",
+    db_type: "sqlite",
+    database: "dwh.sqlite",
+    database_file: "dwh.sqlite",
+  },
+  {
+    name: "staging",
+    db_type: "sqlite",
+    database: "staging.sqlite",
+    database_file: "staging.sqlite",
+  },
+  {
+    name: "loans_db",
+    db_type: "sqlite",
+    database: "loans_db.sqlite",
+    database_file: "loans_db.sqlite",
+  },
   {
     name: "collateral_db",
     db_type: "sqlite",
     database: "collateral_db.sqlite",
+    database_file: "collateral_db.sqlite",
   },
 ];
 

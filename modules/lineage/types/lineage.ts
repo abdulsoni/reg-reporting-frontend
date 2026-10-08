@@ -55,8 +55,12 @@ export type ExploreResponse = {
   next_source: NextSource;
 };
 
+/*
+ * POST /lineage/connect identifies the connection by its type and database
+ * only — the backend resolves the registered system itself, so no system
+ * name is sent.
+ */
 export type ConnectRequest = {
-  system: string;
   db_type: string;
   database: string;
 };
@@ -64,6 +68,7 @@ export type ConnectRequest = {
 export type ConnectResponse = {
   status: "success";
   system: string;
+  db_type: string;
   database: string;
   message: string;
 };
@@ -78,11 +83,15 @@ export type DatapointRef = {
 
 /**
  * POST /lineage/trace starts from a stored datapoint id. Pass `trace_id` to
- * resume a trace that was parked waiting on a system connection.
+ * resume a trace that was parked waiting on a system connection. The system the
+ * trace runs against is the one the backend resolved for the last
+ * /lineage/connect call, so its identity travels with every trace request.
  */
 export type StartTraceRequest = {
-  system: string;
   datapoint_id: string;
+  system: string;
+  db_type: string;
+  database: string;
   report_id?: string | null;
   trace_id?: string | null;
 };

@@ -56,6 +56,12 @@ type TraceState = {
 
 const traces = new Map<string, TraceState>();
 
+/*
+ * The trace request names its own system, but the mock still remembers the last
+ * connection so an ad-hoc trace with no system has something to anchor to.
+ */
+let lastConnected: string | null = null;
+
 const LATENCY_MS = 400;
 
 const NO_NEXT_SOURCE: NextSource = {
@@ -236,28 +242,40 @@ export const mockLineageApi: LineageApi = {
   ): Promise<ConnectResponse> {
     await delay();
 
-    const descriptor = SYSTEMS.find((s) => s.name === request.system);
+    /*
+     * Without a system in the request the connection is identified by its
+     * database: a registered system matches on its file, anything else is
+     * treated under the name its database implies.
+     */
+    const descriptor =
+      SYSTEMS.find(
+        (system) =>
+          system.database_file === request.database ||
+          system.database === request.database
+      ) ?? null;
 
-    if (!descriptor) {
-      throw new Error(`Unknown system: ${request.system}`);
-    }
+    const systemName =
+      descriptor?.name ?? request.database.replace(/\.[^.]+$/, "");
 
     for (const trace of traces.values()) {
       const wasBlocked = trace.pending.some(
-        (target) => target.system === request.system
+        (target) => target.system === systemName
       );
 
-      if (trace.connected.has(request.system) || !wasBlocked) continue;
+      if (trace.connected.has(systemName) || !wasBlocked) continue;
 
-      trace.connected.add(request.system);
+      trace.connected.add(systemName);
       resume(trace);
     }
 
+    lastConnected = systemName;
+
     return {
       status: "success",
-      system: request.system,
-      database: descriptor.database,
-      message: `Connected to ${request.system} (${descriptor.database}) read-only.`,
+      system: systemName,
+      db_type: request.db_type,
+      database: request.database,
+      message: `Connected to ${systemName} (${request.database}) read-only.`,
     };
   },
 
@@ -286,21 +304,23 @@ export const mockLineageApi: LineageApi = {
       : undefined;
 
     if (existing) {
-      // Resuming means the caller has connected the blocking system, so the
-      // walk picks up from the parked upstream column.
-      if (!existing.connected.has(request.system)) {
-        existing.connected.add(request.system);
-      }
-
+      // Resuming means the caller has already connected the blocking system,
+      // so the walk picks up from the parked upstream column.
       resume(existing);
 
       return summary(existing);
     }
 
+    /*
+     * The trace names the system it runs against, so that connection anchors
+     * the walk the way the backend would; only ad-hoc calls fall back to the
+     * most recent connection.
+     */
+    const origin = request.system ?? lastConnected ?? "reporting_db";
     const traceId = `trace-${request.report_id ?? request.datapoint_id}`;
     const trace = newTrace(
       traceId,
-      request.system,
+      origin,
       request.report_id ?? null,
       request.datapoint_id ?? null
     );
@@ -314,7 +334,7 @@ export const mockLineageApi: LineageApi = {
      */
     const anchor = PRIMARY_CHAIN[0];
 
-    consume(trace, request.system, anchor.table, anchor.attribute);
+    consume(trace, origin, anchor.table, anchor.attribute);
 
     return summary(trace);
   },
