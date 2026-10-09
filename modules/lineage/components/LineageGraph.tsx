@@ -34,99 +34,6 @@ type FlowEdge = Edge<
 >;
 
 /* ============================================================
- * LAYOUT
- * ============================================================
- *
- * The reference design is:
- *
- * SYSTEM OF RECORD | STAGING | WAREHOUSE | DATA MART |
- * CALC ENGINE | REPORTING LAYER
- *
- * We derive the lane from the system/table name.
- */
-
-type Lane =
-  | "source"
-  | "staging"
-  | "warehouse"
-  | "data_mart"
-  | "calc_engine"
-  | "reporting";
-
-const LANE_ORDER: Lane[] = [
-  "source",
-  "staging",
-  "warehouse",
-  "data_mart",
-  "calc_engine",
-  "reporting",
-];
-
-const LANE_LABELS: Record<Lane, string> = {
-  source: "SYSTEM OF RECORD",
-  staging: "STAGING",
-  warehouse: "WAREHOUSE",
-  data_mart: "DATA MART",
-  calc_engine: "CALC ENGINE",
-  reporting: "REPORTING LAYER",
-};
-
-const LANE_WIDTH = 250;
-const NODE_WIDTH = 205;
-const NODE_HEIGHT = 82;
-
-const LANE_X: Record<Lane, number> = {
-  source: 20,
-  staging: 270,
-  warehouse: 520,
-  data_mart: 770,
-  calc_engine: 1020,
-  reporting: 1270,
-};
-
-function getLane(
-  data: GraphNodeData,
-): Lane {
-  const system = data.system?.toLowerCase() ?? "";
-  const table = data.table?.toLowerCase() ?? "";
-
-  if (system === "reporting_db") {
-    return "reporting";
-  }
-
-  if (
-    system === "sa_engine" ||
-    system.includes("calc") ||
-    system.includes("engine")
-  ) {
-    return "calc_engine";
-  }
-
-  if (
-    table.startsWith("mart_") ||
-    system.includes("mart")
-  ) {
-    return "data_mart";
-  }
-
-  if (
-    system === "dwh" &&
-    table.startsWith("dw_")
-  ) {
-    return "warehouse";
-  }
-
-  if (
-    system === "staging" ||
-    system.startsWith("stg")
-  ) {
-    return "staging";
-  }
-
-  return "source";
-}
-
-/* ============================================================
  * HELPERS
  * ============================================================ */
 
@@ -351,78 +258,24 @@ export function LineageGraphView({
 
       /*
        * --------------------------------------------------------
-       * GROUP NODES INTO LANES
-       * --------------------------------------------------------
-       */
-
-      const laneNodes: Record<
-        Lane,
-        typeof graph.nodes
-      > = {
-        source: [],
-        staging: [],
-        warehouse: [],
-        data_mart: [],
-        calc_engine: [],
-        reporting: [],
-      };
-
-      for (const node of graph.nodes) {
-        const lane = getLane(node.data);
-
-        laneNodes[lane].push(node);
-      }
-
-      /*
-       * --------------------------------------------------------
-       * SORT NODES
-       * --------------------------------------------------------
-       *
-       * We want a stable visual layout.
-       */
-
-      for (const lane of LANE_ORDER) {
-        laneNodes[lane].sort(
-          (a, b) =>
-            a.position.y - b.position.y ||
-            a.id.localeCompare(b.id),
-        );
-      }
-
-      /*
-       * --------------------------------------------------------
        * CREATE REACT FLOW NODES
        * --------------------------------------------------------
+       *
+       * The backend lays the graph out left to right: source
+       * columns on the left, the report datapoint on the right,
+       * with the nodes of each column spread vertically. We use
+       * those positions directly so React Flow does not stack
+       * every node into a single column.
        */
 
-      const flowNodes: FlowNode[] = [];
-
-      for (const lane of LANE_ORDER) {
-        const items = laneNodes[lane];
-
-        const totalHeight =
-          items.length * NODE_HEIGHT +
-          Math.max(0, items.length - 1) * 35;
-
-        const startY = Math.max(
-          80,
-          (650 - totalHeight) / 2,
-        );
-
-        items.forEach((node, index) => {
-          flowNodes.push({
-            id: node.id,
-            type: "lineage",
-            position: {
-              x: LANE_X[lane],
-              y:
-                startY +
-                index * (NODE_HEIGHT + 35),
-            },
-            data: node.data,
-          });
-        });
-      }
+      const flowNodes: FlowNode[] = graph.nodes.map(
+        (node) => ({
+          id: node.id,
+          type: "lineage",
+          position: node.position,
+          data: node.data,
+        }),
+      );
 
       /*
        * --------------------------------------------------------
@@ -482,27 +335,6 @@ export function LineageGraphView({
 
   return (
     <div className="relative h-[650px] overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7]">
-      {/* ======================================================
-       * LANE HEADERS
-       * ====================================================== */}
-
-      <div className="pointer-events-none absolute left-0 right-0 top-3 z-10 flex">
-        {LANE_ORDER.map((lane) => (
-          <div
-            key={lane}
-            className="w-[250px] text-center font-sans text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-600"
-            style={{
-              marginLeft:
-                lane === "source"
-                  ? 0
-                  : 0,
-            }}
-          >
-            {LANE_LABELS[lane]}
-          </div>
-        ))}
-      </div>
-
       {/* ======================================================
        * REACT FLOW
        * ====================================================== */}
