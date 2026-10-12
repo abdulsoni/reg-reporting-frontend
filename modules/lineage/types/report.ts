@@ -36,6 +36,10 @@ export interface UploadProgress {
 export interface ExtractedTable {
   page: number;
   rows: string[][];
+  /** Optional column labels the API extracted; when absent rows[0] is the header. */
+  headers?: string[] | null;
+  /** Optional structured rows the API extracted alongside the raw grid. */
+  records?: unknown;
 }
 
 export interface ExtractedPage {

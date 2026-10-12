@@ -1,4 +1,4 @@
-import type { Datapoint } from "../types/report";
+import type { Datapoint, ExtractedTable } from "../types/report";
 
 /**
  * Parse a regulatory figure for display and comparison. Regulatory tables carry
@@ -57,4 +57,85 @@ export function isSameDatapoint(
   if (!a || !b) return false;
 
   return a.id === b.id;
+}
+
+export interface TableLayout {
+  headers: string[];
+  bodyRows: string[][];
+}
+
+/*
+ * An extracted table only carries a cell grid. When the API did not label the
+ * columns, the first row doubles as the header, so the body starts one row down.
+ */
+export function resolveTableLayout(table: ExtractedTable): TableLayout {
+  const rows = table.rows ?? [];
+
+  const hasLabels = Array.isArray(table.headers) && table.headers.length > 0;
+
+  const headers = hasLabels ? (table.headers as string[]) : (rows[0] ?? []);
+
+  const bodyRows = (hasLabels ? rows : rows.slice(1)).filter((row) =>
+    row.some((cell) => cell.trim() !== "")
+  );
+
+  return { headers, bodyRows };
+}
+
+/** Lowercase and collapse anything that is not alphanumeric to underscores. */
+function normalizeToken(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+/*
+ * The displayed grid is the raw extracted table, but selection still has to
+ * resolve to a stored datapoint. Match a row's cells and the column labels
+ * against each datapoint's coordinates and keep the strongest candidate.
+ */
+export function findDatapointForRow(
+  row: string[],
+  headers: string[],
+  datapoints: Datapoint[]
+): Datapoint | null {
+  const cells = row.map((cell) => cell.trim()).filter(Boolean);
+  const headerTokens = new Set(headers.map(normalizeToken));
+
+  let best: Datapoint | null = null;
+  let bestScore = 0;
+
+  for (const datapoint of datapoints) {
+    let score = 0;
+
+    if (datapoint.rowCode) {
+      if (!cells.includes(datapoint.rowCode)) continue;
+
+      score += 3;
+    }
+
+    if (datapoint.columnCode) {
+      const normalized = normalizeToken(datapoint.columnCode);
+
+      if (cells.includes(datapoint.columnCode) || headerTokens.has(normalized)) {
+        score += 2;
+      }
+    }
+
+    if (datapoint.attribute) {
+      const normalized = normalizeToken(datapoint.attribute);
+
+      if (cells.includes(datapoint.attribute) || headerTokens.has(normalized)) {
+        score += 2;
+      }
+    }
+
+    if (score > bestScore) {
+      best = datapoint;
+      bestScore = score;
+    }
+  }
+
+  return best;
 }

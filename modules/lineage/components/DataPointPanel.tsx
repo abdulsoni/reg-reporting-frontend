@@ -5,15 +5,15 @@ import { useState } from "react";
 
 import { useReports } from "../context/ReportContext";
 import { useLineage } from "../context/LineageContext";
-import { parseNumericValue } from "../utils/datapoints";
+import {
+  findDatapointForRow,
+  parseNumericValue,
+  resolveTableLayout,
+} from "../utils/datapoints";
 import type { Datapoint } from "../types/report";
 
-const COLUMNS = [
-  "Row",
-  "Column",
-  "Metric",
-  "Reported value",
-] as const;
+/* Only used when a report stored figures but no extracted table grid. */
+const DATAPOINT_COLUMNS = ["Row", "Column", "Metric", "Reported value"] as const;
 
 export function DataPointPanel() {
   const { reports, selectedReportId, selectedReport, setSelectedReportId } =
@@ -30,6 +30,13 @@ export function DataPointPanel() {
    * selection identifies the same figure the lineage tracer resolves.
    */
   const datapoints = selectedReport?.datapoints ?? [];
+
+  /*
+   * The table shown is the selected report's own extracted grid, so its column
+   * labels come from the report data rather than a fixed set. Reports stored
+   * before tables were captured fall back to the derived datapoint list below.
+   */
+  const layouts = (selectedReport?.tables ?? []).map(resolveTableLayout);
 
   const isSelected = (id: string) => selectedDatapoint?.id === id;
 
@@ -101,16 +108,82 @@ export function DataPointPanel() {
       </div>
 
       {/* Data table */}
-      {datapoints.length > 0 ? (
+      {layouts.length > 0 ? (
+        <div className="mt-4 space-y-3 overflow-x-auto">
+          {layouts.map((layout, tableIndex) => (
+            <table
+              key={tableIndex}
+              className="w-full min-w-[420px] border-collapse text-[11px]"
+            >
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50">
+                  {layout.headers.map((header, index) => (
+                    <th
+                      key={`${header}-${index}`}
+                      className={`px-2 py-2 text-[9px] font-bold uppercase tracking-wider text-slate-500 ${
+                        index === layout.headers.length - 1
+                          ? "text-right"
+                          : "text-left"
+                      }`}
+                    >
+                      {header || "—"}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+
+              <tbody>
+                {layout.bodyRows.map((row, rowIndex) => {
+                  const datapoint = findDatapointForRow(
+                    row,
+                    layout.headers,
+                    datapoints
+                  );
+
+                  const active = datapoint ? isSelected(datapoint.id) : false;
+
+                  return (
+                    <tr
+                      key={rowIndex}
+                      onClick={
+                        datapoint ? () => handleSelect(datapoint) : undefined
+                      }
+                      aria-selected={active}
+                      className={`border-b border-slate-100 last:border-0 ${
+                        active ? "bg-navy" : "hover:bg-slate-50"
+                      } ${datapoint ? "cursor-pointer" : ""}`}
+                    >
+                      {row.map((cell, cellIndex) => (
+                        <td
+                          key={cellIndex}
+                          className={`px-2 py-2.5 font-mono text-[10px] ${
+                            cellIndex === row.length - 1
+                              ? "text-right"
+                              : "text-left"
+                          } ${active ? "font-bold text-white" : "text-slate-700"}`}
+                        >
+                          {cell || "—"}
+                        </td>
+                      ))}
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          ))}
+        </div>
+      ) : datapoints.length > 0 ? (
         <div className="mt-4 overflow-x-auto">
           <table className="w-full min-w-[420px] border-collapse text-[11px]">
             <thead>
               <tr className="border-b border-slate-200 bg-slate-50">
-                {COLUMNS.map((column, index) => (
+                {DATAPOINT_COLUMNS.map((column, index) => (
                   <th
                     key={column}
                     className={`px-2 py-2 text-[9px] font-bold uppercase tracking-wider text-slate-500 ${
-                      index === COLUMNS.length - 1 ? "text-right" : "text-left"
+                      index === DATAPOINT_COLUMNS.length - 1
+                        ? "text-right"
+                        : "text-left"
                     }`}
                   >
                     {column}
