@@ -15,6 +15,7 @@ import { useReports } from "../context/ReportContext";
 import { LineageHeader } from "../components/LineageHeader";
 import { LineageGraphView } from "../components/LineageGraph";
 import { HopDetail } from "../components/HopDetail";
+import { NodeDetail } from "../components/NodeDetail";
 import { TraceError } from "../components/NextSourceCard";
 
 export function LineageEvidence() {
@@ -28,16 +29,26 @@ export function LineageEvidence() {
   const selectedHop = useMemo(() => {
     if (!hops.length) return null;
 
+    /* Nothing selected: default to the most recent hop. */
     if (!selectedNodeId) return hops[hops.length - 1];
 
-    const match = hops.find(
-      (hop) =>
-        `${hop.system}:${hop.table_name}:${hop.attribute_name}` ===
-        selectedNodeId
+    /*
+     * A node that maps to a hop shows the richer hop evidence; a graph-only
+     * node (branch or pending) falls through to `selectedNode` below.
+     */
+    return (
+      hops.find(
+        (hop) =>
+          `${hop.system}:${hop.table_name}:${hop.attribute_name}` ===
+          selectedNodeId
+      ) ?? null
     );
-
-    return match ?? hops[hops.length - 1];
   }, [hops, selectedNodeId]);
+
+  const selectedNode = useMemo(
+    () => graph?.nodes.find((node) => node.id === selectedNodeId) ?? null,
+    [graph, selectedNodeId]
+  );
 
   const proven = hops.filter((hop) => hop.status === "IDENTIFIED").length;
   const sourceReached = hops.filter(
@@ -143,6 +154,8 @@ export function LineageEvidence() {
 
                 {selectedHop ? (
                   <HopDetail hop={selectedHop} />
+                ) : selectedNode ? (
+                  <NodeDetail data={selectedNode.data} />
                 ) : (
                   <p className="text-[11px] text-slate-500">
                     Select a node in the graph.

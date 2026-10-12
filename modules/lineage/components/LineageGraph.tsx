@@ -288,13 +288,12 @@ export function LineageGraphView({
     };
   }, [handleDeselect]);
 
-  const { nodes, edges, selectedData } =
+  const { nodes, edges } =
     useMemo(() => {
       if (!graph) {
         return {
           nodes: [] as FlowNode[],
           edges: [] as FlowEdge[],
-          selectedData: null,
         };
       }
 
@@ -344,20 +343,12 @@ export function LineageGraphView({
           }),
         );
 
-      const selectedNode =
-        flowNodes.find(
-          (node) => node.id === selectedId,
-        );
-
       return {
         nodes: flowNodes,
         edges: flowEdges,
-        selectedData:
-          selectedNode?.data ?? null,
       };
     }, [
       graph,
-      selectedId,
     ]);
 
   if (!graph || nodes.length === 0) {
@@ -450,65 +441,6 @@ export function LineageGraphView({
       </ReactFlow>
 
       {/* ======================================================
-       * SELECTED NODE DETAIL PANEL
-       * ====================================================== */}
-
-      {selectedData && (
-        <div className="absolute right-4 top-14 z-20 w-[310px] rounded-lg border border-slate-200 bg-white p-4 shadow-lg">
-          <div className="flex items-start justify-between">
-            <div>
-              <div className="font-mono text-[10px] font-bold uppercase tracking-[0.1em] text-slate-500">
-                Selected hop
-              </div>
-
-              <div className="mt-1 font-mono text-sm font-semibold text-slate-900">
-                {selectedData.table}
-              </div>
-
-              <div className="font-mono text-xs text-slate-600">
-                {selectedData.attribute}
-              </div>
-            </div>
-
-            {isFinalSource(
-              selectedData,
-            ) && (
-              <span className="rounded-full bg-emerald-50 px-2 py-1 text-[9px] font-bold uppercase tracking-wider text-emerald-700">
-                Proven
-              </span>
-            )}
-          </div>
-
-          <div className="mt-4 space-y-3 border-t border-slate-100 pt-3">
-            <DetailItem
-              label="System"
-              value={selectedData.system}
-            />
-
-            <DetailItem
-              label="Attribute held in"
-              value={`${selectedData.table}.${selectedData.attribute}`}
-            />
-
-            {selectedData.transformation && (
-              <DetailItem
-                label="Transformation"
-                value={selectedData.transformation}
-              />
-            )}
-
-            <DetailItem
-              label="Status"
-              value={
-                selectedData.status ??
-                "IDENTIFIED"
-              }
-            />
-          </div>
-        </div>
-      )}
-
-      {/* ======================================================
        * LEGEND
        * ====================================================== */}
 
@@ -537,34 +469,6 @@ export function LineageGraphView({
           Selected {selectedId}
         </p>
       )}
-    </div>
-  );
-}
-
-/* ============================================================
- * DETAIL ITEM
- * ============================================================ */
-
-function DetailItem({
-  label,
-  value,
-}: {
-  label: string;
-  value: string | null | undefined;
-}) {
-  if (!value) {
-    return null;
-  }
-
-  return (
-    <div>
-      <div className="text-[9px] font-semibold uppercase tracking-[0.1em] text-slate-400">
-        {label}
-      </div>
-
-      <div className="mt-1 break-words font-mono text-[10px] leading-4 text-slate-700">
-        {value}
-      </div>
     </div>
   );
 }
