@@ -422,7 +422,7 @@ export function LineageGraphView({
           position="bottom-left"
         />
 
-        <MiniMap
+        {/* <MiniMap
           pannable
           zoomable
           position="bottom-right"
@@ -446,7 +446,7 @@ export function LineageGraphView({
 
             return "#64748b";
           }}
-        />
+        /> */}
       </ReactFlow>
 
       {/* ======================================================
@@ -512,7 +512,7 @@ export function LineageGraphView({
        * LEGEND
        * ====================================================== */}
 
-      <div className="absolute bottom-5 left-5 z-20 flex items-center gap-5 rounded-md bg-white/90 px-3 py-2 text-[9px] text-slate-600 shadow-sm backdrop-blur">
+      {/* <div className="absolute bottom-5 left-5 z-20 flex items-center gap-5 rounded-md bg-white/90 px-3 py-2 text-[9px] text-slate-600 shadow-sm backdrop-blur">
         <div className="flex items-center gap-1.5">
           <span className="h-[2px] w-5 bg-slate-500" />
           Proven
@@ -527,7 +527,7 @@ export function LineageGraphView({
           <span className="h-2.5 w-2.5 rounded-full border border-emerald-500 bg-white" />
           Final source
         </div>
-      </div>
+      </div> */}
 
       {selectedId && (
         <p
