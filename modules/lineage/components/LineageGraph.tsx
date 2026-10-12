@@ -17,7 +17,13 @@ import {
   type NodeProps,
 } from "@xyflow/react";
 
-import { useMemo, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 
 import type {
   GraphNodeData,
@@ -229,7 +235,7 @@ const edgeTypes = {
 
 type LineageGraphViewProps = {
   graph: LineageGraph | null;
-  onSelectNode?: (nodeId: string) => void;
+  onSelectNode?: (nodeId: string | null) => void;
   selectedNodeId?: string | null;
 };
 
@@ -245,6 +251,42 @@ export function LineageGraphView({
 
   const selectedId =
     selectedNodeId ?? internalSelected;
+
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  /*
+   * Clearing selection has to reset both the internal fallback and the
+   * controlled value the parent owns, otherwise the `??` above re-selects the
+   * previously clicked node.
+   */
+  const handleDeselect = useCallback(() => {
+    setInternalSelected(null);
+    onSelectNode?.(null);
+  }, [onSelectNode]);
+
+  /*
+   * A click anywhere outside the graph container dismisses the floating detail
+   * panel. Clicks inside are left to React Flow (nodes) and the pane handler.
+   */
+  useEffect(() => {
+    function handlePointerDown(event: PointerEvent) {
+      const container = containerRef.current;
+
+      if (
+        container &&
+        event.target instanceof HTMLElement &&
+        !container.contains(event.target)
+      ) {
+        handleDeselect();
+      }
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+    };
+  }, [handleDeselect]);
 
   const { nodes, edges, selectedData } =
     useMemo(() => {
@@ -334,7 +376,10 @@ export function LineageGraphView({
   };
 
   return (
-    <div className="relative h-[650px] overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7]">
+    <div
+      ref={containerRef}
+      className="relative h-[650px] overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7]"
+    >
       {/* ======================================================
        * REACT FLOW
        * ====================================================== */}
@@ -362,6 +407,7 @@ export function LineageGraphView({
         onNodeClick={(_, node) =>
           handleNodeClick(node.id)
         }
+        onPaneClick={handleDeselect}
         nodesFocusable
         className="bg-[#fbfaf7]"
       >
