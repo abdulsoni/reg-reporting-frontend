@@ -264,7 +264,7 @@ export function DataPointPanel() {
       )}
 
       {/* Selection summary / editable correction */}
-      {selectedDatapoint && !editing && (
+      {/* {selectedDatapoint && !editing && (
         <div className="mt-4 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5">
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -297,7 +297,7 @@ export function DataPointPanel() {
             </button>
           </div>
         </div>
-      )}
+      )} */}
 
       {editing && draft && (
         <div className="mt-4 rounded-lg border border-amber-300 bg-amber-50 px-3 py-3">
