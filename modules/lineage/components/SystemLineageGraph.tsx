@@ -41,7 +41,7 @@ function SystemNode({ data }: NodeProps<Node<SystemData, "system">>) {
             {data.description}
           </div>
 
-          {data.target && (
+          {data.canExplore && (
             <div className="mt-2 text-xs font-medium text-blue-600">
               Click to explore tables →
             </div>
@@ -74,9 +74,7 @@ export default function SystemLineageGraph({
         edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => {
-          if (node.id === "normalized_data") {
-            onSelectSystem(node.id);
-          }
+          onSelectSystem(node.id);
         }}
         fitView
         fitViewOptions={{ padding: 0.2 }}

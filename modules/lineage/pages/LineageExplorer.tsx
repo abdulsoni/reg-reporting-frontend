@@ -5,14 +5,18 @@ import { ArrowLeft } from "lucide-react";
 
 import LineageGroupGraph from "../components/LineageGroupGraph";
 import SystemLineageGraph from "../components/SystemLineageGraph";
+import { lineageData } from "../data/lineageData";
 
 export function LineageExplorer() {
   const [selectedSystem, setSelectedSystem] = useState<string | null>(null);
 
+  const selectedSystemData =
+    lineageData.systems.find((system) => system.id === selectedSystem) ?? null;
+
   return (
     <div className="min-h-screen bg-[#f4f2ed]">
       <main className="mx-auto max-w-[1500px] p-4 sm:p-6 lg:p-8">
-        {selectedSystem === "normalized_data" ? (
+        {selectedSystemData ? (
           <div className="space-y-4">
             <button
               type="button"
@@ -25,7 +29,7 @@ export function LineageExplorer() {
 
             <div>
               <h2 className="text-lg font-bold tracking-tight text-ink sm:text-xl">
-                normalized_data.db
+                {selectedSystemData.label}
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
@@ -35,7 +39,7 @@ export function LineageExplorer() {
             </div>
 
             <section className="panel p-5">
-              <LineageGroupGraph />
+              <LineageGroupGraph systemId={selectedSystemData.id} />
             </section>
           </div>
         ) : (

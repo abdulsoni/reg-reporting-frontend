@@ -229,7 +229,15 @@ function DetailPanel({ title, onClose, children }: DetailPanelProps) {
 
 }
 
-export default function LineageGroupGraph() {
+export default function LineageGroupGraph({
+
+  systemId,
+
+}: {
+
+  systemId: string;
+
+}) {
 
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
 
@@ -238,6 +246,28 @@ export default function LineageGroupGraph() {
     null
 
   );
+
+  const systemTables = useMemo(
+
+    () => lineageData.tables.filter((table) => table.systemId === systemId),
+
+    [systemId]
+
+  );
+
+  const systemEdges = useMemo(() => {
+
+    const tableIds = new Set(systemTables.map((table) => table.id));
+
+    return lineageData.edges.filter(
+
+      (edge) =>
+
+        tableIds.has(edge.sourceTable) && tableIds.has(edge.targetTable)
+
+    );
+
+  }, [systemTables]);
 
   function clearSelection() {
 
@@ -257,9 +287,15 @@ export default function LineageGroupGraph() {
 
       ref_fx_data: { x: 0, y: 0 },
 
+      "raw_sensi:raw_sensi": { x: 240, y: 40 },
+
+      "adj_audit:adj_audit": { x: 240, y: 40 },
+
+      "ref_fx_data:ref_fx_data": { x: 240, y: 40 },
+
     };
 
-    const groupNodes: LineageGroupNode[] = lineageData.tables.map((table) => ({
+    const groupNodes: LineageGroupNode[] = systemTables.map((table) => ({
 
       id: table.id,
 
@@ -289,7 +325,7 @@ export default function LineageGroupGraph() {
 
     }));
 
-    const attributeNodes: AttributeNode[] = lineageData.tables.flatMap((table) =>
+    const attributeNodes: AttributeNode[] = systemTables.flatMap((table) =>
 
       table.attributes.map((attribute: Attribute, index: number) => {
 
@@ -353,11 +389,11 @@ export default function LineageGroupGraph() {
 
     return [...groupNodes, ...attributeNodes];
 
-  }, [selectedAttributeId]);
+  }, [selectedAttributeId, systemTables]);
 
   const edges = useMemo<Edge[]>(() => {
 
-    return lineageData.edges.map((item) => {
+    return systemEdges.map((item) => {
 
       const selected = item.id === selectedEdgeId;
 
@@ -413,13 +449,13 @@ export default function LineageGroupGraph() {
 
     });
 
-  }, [selectedEdgeId]);
+  }, [selectedEdgeId, systemEdges]);
 
   const selectedEdge = useMemo(
 
-    () => lineageData.edges.find((item) => item.id === selectedEdgeId) ?? null,
+    () => systemEdges.find((item) => item.id === selectedEdgeId) ?? null,
 
-    [selectedEdgeId]
+    [selectedEdgeId, systemEdges]
 
   );
 
@@ -429,7 +465,7 @@ export default function LineageGroupGraph() {
 
     const [tableId, attributeId] = selectedAttributeId.split(".");
 
-    const table = lineageData.tables.find((item) => item.id === tableId);
+    const table = systemTables.find((item) => item.id === tableId);
 
     const attribute = table?.attributes.find((item) => item.id === attributeId);
 
@@ -437,7 +473,7 @@ export default function LineageGroupGraph() {
 
     return { ...attribute, table: table.name };
 
-  }, [selectedAttributeId]);
+  }, [selectedAttributeId, systemTables]);
 
   const attributeLineage = useMemo<{
 
@@ -451,13 +487,13 @@ export default function LineageGroupGraph() {
 
     return {
 
-      incoming: lineageData.edges.filter(
+      incoming: systemEdges.filter(
 
         (edge) => `${edge.targetTable}.${edge.target}` === selectedAttributeId
 
       ),
 
-      outgoing: lineageData.edges.filter(
+      outgoing: systemEdges.filter(
 
         (edge) => `${edge.sourceTable}.${edge.source}` === selectedAttributeId
 
@@ -465,7 +501,7 @@ export default function LineageGroupGraph() {
 
     };
 
-  }, [selectedAttributeId]);
+  }, [selectedAttributeId, systemEdges]);
 
   return (
 

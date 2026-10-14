@@ -6,6 +6,7 @@ export type SystemData = {
   label: string;
   description: string;
   target?: boolean;
+  canExplore?: boolean;
 };
 
 export type SystemNode = Node<SystemData, "system">;
@@ -26,6 +27,9 @@ export function buildSystemGraph() {
       label: system.label,
       description: system.description,
       target: "target" in system ? system.target : false,
+      canExplore: lineageData.tables.some(
+        (table) => table.systemId === system.id
+      ),
     },
   }));
 
