@@ -381,7 +381,7 @@ export default function LineageGroupGraph() {
           ? `${item.target}-right-target`
           : `${item.target}-in`,
 
-        type: isSameTable && "lineage",
+        type: isSameTable ? "lineage" : undefined,
 
         data: { ...item, sameTable: isSameTable },
 
@@ -408,8 +408,6 @@ export default function LineageGroupGraph() {
         },
 
         zIndex: selected ? 10 : 1,
-
-        data: item,
 
       };
 

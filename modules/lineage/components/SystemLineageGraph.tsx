@@ -12,10 +12,9 @@ import {
 import { Database } from "lucide-react";
 
 import {
-  systemEdges,
-  systemNodes,
+  buildSystemGraph,
   type SystemData,
-} from "../data/systemLineageData";
+} from "../data/systemLineageAdapter";
 
 function SystemNode({ data }: NodeProps<Node<SystemData, "system">>) {
   return (
@@ -66,11 +65,13 @@ export default function SystemLineageGraph({
 }: {
   onSelectSystem: (systemId: string) => void;
 }) {
+  const { nodes, edges } = buildSystemGraph();
+
   return (
     <div className="h-[650px] w-full overflow-hidden rounded-xl border border-line bg-slate-50">
       <ReactFlow
-        nodes={systemNodes}
-        edges={systemEdges}
+        nodes={nodes}
+        edges={edges}
         nodeTypes={nodeTypes}
         onNodeClick={(_, node) => {
           if (node.id === "normalized_data") {
