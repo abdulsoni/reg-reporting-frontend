@@ -13,7 +13,7 @@ import { useMemo, useState } from "react";
 import { useLineage } from "../context/LineageContext";
 import { useReports } from "../context/ReportContext";
 import { LineageHeader } from "../components/LineageHeader";
-import { LineageGraphView } from "../components/LineageGraph";
+import SystemTableLineage from "../components/SystemTableLineage";
 import { HopDetail } from "../components/HopDetail";
 import { NodeDetail } from "../components/NodeDetail";
 import { TraceError } from "../components/NextSourceCard";
@@ -132,20 +132,7 @@ export function LineageEvidence() {
 
             {/* Graph + detail */}
             <div className="grid grid-cols-1 gap-5 lg:grid-cols-[2fr_1fr]">
-              <section className="panel p-5">
-                <h2 className="text-xs font-bold text-ink">Lineage graph</h2>
-
-                <p className="mt-1 mb-4 text-[10px] text-slate-500">
-                  Arrows point from a consuming column to the column that
-                  sourced it. Click a node for its evidence.
-                </p>
-
-                <LineageGraphView
-                  graph={graph}
-                  selectedNodeId={selectedNodeId}
-                  onSelectNode={setSelectedNodeId}
-                />
-              </section>
+              <SystemTableLineage />
 
               <aside className="panel p-5">
                 <h2 className="mb-4 text-xs font-bold text-ink">
