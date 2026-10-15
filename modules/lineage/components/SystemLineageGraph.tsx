@@ -15,6 +15,7 @@ import {
   buildSystemGraph,
   type SystemData,
 } from "../data/systemLineageAdapter";
+import type { LineageData } from "../types/lineage";
 
 function SystemNode({ data }: NodeProps<Node<SystemData, "system">>) {
   return (
@@ -61,11 +62,13 @@ function SystemNode({ data }: NodeProps<Node<SystemData, "system">>) {
 const nodeTypes = { system: SystemNode };
 
 export default function SystemLineageGraph({
+  data,
   onSelectSystem,
 }: {
+  data: LineageData;
   onSelectSystem: (systemId: string) => void;
 }) {
-  const { nodes, edges } = buildSystemGraph();
+  const { nodes, edges } = buildSystemGraph(data);
 
   return (
     <div className="h-[650px] w-full overflow-hidden rounded-xl border border-line bg-slate-50">

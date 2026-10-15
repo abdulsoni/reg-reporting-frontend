@@ -1,4 +1,6 @@
-export const lineageData = {
+import type { LineageData } from "../types/lineage";
+
+export const lineageData: LineageData = {
   database: "normalized_data.db",
 
   systems: [
@@ -349,4 +351,4 @@ export const lineageData = {
       description: "FX rate is used to calculate normalized USD.",
     },
   ],
-} as const;
+};

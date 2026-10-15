@@ -1,6 +1,6 @@
 import { MarkerType, type Edge, type Node } from "@xyflow/react";
 
-import { lineageData } from "./lineageData";
+import type { LineageData } from "../types/lineage";
 
 export type SystemData = {
   label: string;
@@ -11,7 +11,7 @@ export type SystemData = {
 
 export type SystemNode = Node<SystemData, "system">;
 
-export function buildSystemGraph() {
+export function buildSystemGraph(data: LineageData) {
   const positions: Record<string, { x: number; y: number }> = {
     raw_sensi: { x: 40, y: 40 },
     adj_audit: { x: 40, y: 220 },
@@ -19,17 +19,15 @@ export function buildSystemGraph() {
     normalized_data: { x: 430, y: 220 },
   };
 
-  const nodes: SystemNode[] = lineageData.systems.map((system) => ({
+  const nodes: SystemNode[] = data.systems.map((system, index) => ({
     id: system.id,
     type: "system",
-    position: positions[system.id] ?? { x: 0, y: 0 },
+    position: positions[system.id] ?? { x: 0, y: 40 + index * 180 },
     data: {
       label: system.label,
       description: system.description,
-      target: "target" in system ? system.target : false,
-      canExplore: lineageData.tables.some(
-        (table) => table.systemId === system.id
-      ),
+      target: system.target ?? false,
+      canExplore: data.tables.some((table) => table.systemId === system.id),
     },
   }));
 
@@ -37,7 +35,7 @@ export function buildSystemGraph() {
   // connect the same pair of systems.
   const connections = new Map<string, Edge>();
 
-  for (const item of lineageData.edges) {
+  for (const item of data.edges) {
     const source: string | undefined = item.sourceSystemId;
     const target: string | undefined = item.targetSystemId;
 

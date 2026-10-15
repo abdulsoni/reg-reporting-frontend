@@ -143,3 +143,47 @@ export type SystemDescriptor = {
   database: string;
   database_file: string;
 };
+
+/** A column discovered while tracing a system's tables. */
+export type LineageAttribute = {
+  id: string;
+  name: string;
+  dataType: string;
+  transformation: string;
+  status: string;
+  sourceSystemId?: string;
+};
+
+export type LineageTable = {
+  id: string;
+  name: string;
+  systemId: string;
+  attributes: LineageAttribute[];
+};
+
+export type LineageSystem = {
+  id: string;
+  label: string;
+  description: string;
+  target?: boolean;
+};
+
+export type LineageEdge = {
+  id: string;
+  source: string;
+  target: string;
+  sourceTable: string;
+  targetTable: string;
+  sourceSystemId: string;
+  targetSystemId: string;
+  transformation: string;
+  description: string;
+};
+
+/** The full lineage graph returned by GET /api/lineage. */
+export type LineageData = {
+  database: string;
+  systems: LineageSystem[];
+  tables: LineageTable[];
+  edges: LineageEdge[];
+};

@@ -32,13 +32,15 @@ import {
 
 } from "@xyflow/react";
 
-import { lineageData } from "../data/lineageData";
+import type {
+  LineageAttribute,
+  LineageData,
+  LineageEdge,
+} from "../types/lineage";
 
 import { LineageGroup, type LineageGroupNode } from "./LineageGroup";
 
-type Attribute = (typeof lineageData.tables)[number]["attributes"][number];
-
-type LineageEdge = (typeof lineageData.edges)[number];
+type Attribute = LineageAttribute;
 
 type AttributeNodeData = {
 
@@ -231,9 +233,13 @@ function DetailPanel({ title, onClose, children }: DetailPanelProps) {
 
 export default function LineageGroupGraph({
 
+  data,
+
   systemId,
 
 }: {
+
+  data: LineageData;
 
   systemId: string;
 
@@ -249,9 +255,9 @@ export default function LineageGroupGraph({
 
   const systemTables = useMemo(
 
-    () => lineageData.tables.filter((table) => table.systemId === systemId),
+    () => data.tables.filter((table) => table.systemId === systemId),
 
-    [systemId]
+    [data, systemId]
 
   );
 
@@ -259,7 +265,7 @@ export default function LineageGroupGraph({
 
     const tableIds = new Set(systemTables.map((table) => table.id));
 
-    return lineageData.edges.filter(
+    return data.edges.filter(
 
       (edge) =>
 
@@ -267,7 +273,7 @@ export default function LineageGroupGraph({
 
     );
 
-  }, [systemTables]);
+  }, [data, systemTables]);
 
   function clearSelection() {
 

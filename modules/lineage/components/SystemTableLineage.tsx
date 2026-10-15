@@ -5,13 +5,23 @@ import { ArrowLeft } from "lucide-react";
 
 import LineageGroupGraph from "./LineageGroupGraph";
 import SystemLineageGraph from "./SystemLineageGraph";
-import { lineageData } from "../data/lineageData";
+import { useLineageData } from "../hooks/useLineageData";
 
 export default function SystemTableLineage() {
   const [selectedSystem, setSelectedSystem] = useState<string | null>(null);
 
+  const { data, loading, error } = useLineageData();
+
   const selectedSystemData =
-    lineageData.systems.find((system) => system.id === selectedSystem) ?? null;
+    data.systems.find((system) => system.id === selectedSystem) ?? null;
+
+  if (loading) {
+    return (
+      <div className="flex h-[400px] items-center justify-center rounded-xl border border-line bg-white text-sm text-slate-500">
+        Loading lineage…
+      </div>
+    );
+  }
 
   if (selectedSystemData) {
     return (
@@ -37,7 +47,7 @@ export default function SystemTableLineage() {
         </div>
 
         <section className="panel p-5">
-          <LineageGroupGraph systemId={selectedSystemData.id} />
+          <LineageGroupGraph data={data} systemId={selectedSystemData.id} />
         </section>
       </div>
     );
@@ -55,8 +65,14 @@ export default function SystemTableLineage() {
         </p>
       </div>
 
+      {error && (
+        <p className="text-xs text-amber-600">
+          Could not reach the lineage API. Showing the bundled snapshot.
+        </p>
+      )}
+
       <section className="panel p-5">
-        <SystemLineageGraph onSelectSystem={setSelectedSystem} />
+        <SystemLineageGraph data={data} onSelectSystem={setSelectedSystem} />
       </section>
     </div>
   );
