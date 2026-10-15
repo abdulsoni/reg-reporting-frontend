@@ -75,11 +75,8 @@ function AttributeField({ id, data }: NodeProps<AttributeNode>) {
       }}
 
       className={`flex h-full w-full cursor-pointer items-center rounded-md border bg-white px-3 shadow-sm transition-colors ${data.selected
-
-          ? "border-blue-600 bg-blue-50 ring-2 ring-blue-300"
-
-          : "border-slate-200 hover:border-blue-400"
-
+          ? "border-slate-900 ring-2 ring-slate-900/10"
+          : "border-slate-300 hover:border-slate-400"
         }`}
 
     >
@@ -92,19 +89,19 @@ function AttributeField({ id, data }: NodeProps<AttributeNode>) {
 
         position={Position.Left}
 
-        className="!h-2.5 !w-2.5 !border-2 !border-white !bg-blue-500"
+        className="!h-[7px] !w-[7px] !border-2 !border-slate-500 !bg-white"
 
       />
 
       <div className="min-w-0 flex-1">
 
-        <div className="truncate text-xs font-semibold text-slate-800">
+        <div className="truncate font-mono text-[10px] font-bold text-slate-800">
 
           {data.label}
 
         </div>
 
-        <div className="truncate text-[10px] text-slate-500">
+        <div className="truncate font-mono text-[9px] text-slate-500">
 
           {data.dataType}
 
@@ -120,7 +117,7 @@ function AttributeField({ id, data }: NodeProps<AttributeNode>) {
 
         position={Position.Right}
 
-        className="!h-2.5 !w-2.5 !border-2 !border-white !bg-emerald-500"
+        className="!h-[7px] !w-[7px] !border-2 !border-slate-500 !bg-white"
 
       />
 
@@ -128,7 +125,7 @@ function AttributeField({ id, data }: NodeProps<AttributeNode>) {
         id={`${id.split(".").pop()}-right-target`}
         type="target"
         position={Position.Right}
-        className="!h-2.5 !w-2.5 !border-2 !border-white !bg-blue-500"
+        className="!h-[7px] !w-[7px] !border-2 !border-slate-500 !bg-white"
       />
 
     </div>
@@ -435,15 +432,19 @@ export default function LineageGroupGraph({
 
           type: MarkerType.ArrowClosed,
 
-          color: selected ? "#2563eb" : "#94a3b8",
+          width: 14,
+
+          height: 14,
+
+          color: selected ? "#0f172a" : "#64748b",
 
         },
 
         style: {
 
-          stroke: selected ? "#2563eb" : "#94a3b8",
+          stroke: selected ? "#0f172a" : "#64748b",
 
-          strokeWidth: selected ? 4 : 1.5,
+          strokeWidth: selected ? 3 : 1.7,
 
           opacity: selectedEdgeId && !selected ? 0.25 : 1,
 
@@ -511,7 +512,7 @@ export default function LineageGroupGraph({
 
   return (
 
-    <div className="relative h-[780px] w-full overflow-hidden rounded-xl border border-line bg-slate-100">
+    <div className="relative h-[780px] w-full overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7]">
 
       <ReactFlow
 
@@ -535,19 +536,23 @@ export default function LineageGroupGraph({
 
         fitView
 
-        fitViewOptions={{ padding: 0.15 }}
+        fitViewOptions={{ padding: 0.12 }}
 
         minZoom={0.25}
 
         maxZoom={1.5}
 
+        nodesConnectable={false}
+
         proOptions={{ hideAttribution: true }}
+
+        className="bg-[#fbfaf7]"
 
       >
 
-        <Background gap={20} color="#cbd5e1" />
+        <Background color="#e5e2da" gap={22} size={1} />
 
-        <Controls />
+        <Controls showInteractive={false} position="bottom-left" />
 
         {/* <MiniMap pannable zoomable /> */}
 
