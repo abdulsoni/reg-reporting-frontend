@@ -108,14 +108,14 @@ const nodeTypes = { system: SystemNode, dependency: DependencyNode };
 
 export default function SystemLineageGraph({
   data,
-  selectedSystemId,
+  selectedSystemIds,
   onSelectSystem,
 }: {
   data: LineageData;
-  selectedSystemId?: string | null;
+  selectedSystemIds?: string[];
   onSelectSystem: (systemId: string) => void;
 }) {
-  const { nodes, edges } = buildSystemGraph(data, selectedSystemId);
+  const { nodes, edges } = buildSystemGraph(data, selectedSystemIds);
 
   return (
     <div className="relative h-[650px] w-full overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7]">

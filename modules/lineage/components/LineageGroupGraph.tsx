@@ -258,11 +258,11 @@ function formatEndpoint(
   endpoint: LineageEndpoint,
   data: LineageData,
   resolution: ReturnType<typeof resolveEndpoint>,
-  selectedSystemId: string
+  open: ReadonlySet<string>
 ): string {
   if (resolution.kind === "resolved") {
     const owner =
-      resolution.table.systemId === selectedSystemId
+      open.has(endpoint.systemId)
         ? resolution.table.name
         : data.systems.find((system) => system.id === endpoint.systemId)?.label ??
           endpoint.systemId;
@@ -283,19 +283,23 @@ function formatEndpoint(
 
 export default function LineageGroupGraph({
   data,
-  systemId,
-  onSelectSystem,
+  openSystemIds,
+  onExpandSystem,
 }: {
   data: LineageData;
-  systemId: string;
-  onSelectSystem?: (systemId: string) => void;
+  openSystemIds: string[];
+  onExpandSystem?: (systemId: string) => void;
 }) {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedAttributeId, setSelectedAttributeId] = useState<string | null>(
     null
   );
 
-  const graph = useMemo(() => buildTableGraph(data, systemId), [data, systemId]);
+  const open = useMemo(() => new Set(openSystemIds), [openSystemIds]);
+  const graph = useMemo(
+    () => buildTableGraph(data, openSystemIds),
+    [data, openSystemIds]
+  );
 
   function clearSelection() {
     setSelectedEdgeId(null);
@@ -323,12 +327,12 @@ export default function LineageGroupGraph({
       const sourceId = tableEndpointNodeId(
         edge.source,
         resolveEndpoint(edge.source, data),
-        systemId
+        open
       );
       const targetId = tableEndpointNodeId(
         edge.target,
         resolveEndpoint(edge.target, data),
-        systemId
+        open
       );
 
       if (!sourceId || !targetId || sourceId === targetId) continue;
@@ -344,7 +348,7 @@ export default function LineageGroupGraph({
       nodesep: 70,
       ranksep: 140,
     });
-  }, [data, graph, systemId]);
+  }, [data, graph, open]);
 
   const nodes = useMemo(() => {
     const groupNodes: LineageGroupNode[] = graph.tables.map((table) => ({
@@ -410,8 +414,8 @@ export default function LineageGroupGraph({
           message: external.message,
           kind: external.kind,
           onSelect:
-            external.kind === "connected" && onSelectSystem
-              ? () => onSelectSystem(external.systemId)
+            external.kind === "connected" && onExpandSystem
+              ? () => onExpandSystem(external.systemId)
               : undefined,
         },
         selectable: false,
@@ -419,7 +423,7 @@ export default function LineageGroupGraph({
     );
 
     return [...groupNodes, ...attributeNodes, ...placeholderNodes];
-  }, [graph, layoutPositions, selectedAttributeId, onSelectSystem]);
+  }, [graph, layoutPositions, selectedAttributeId, onExpandSystem]);
 
   const edges = useMemo<Edge[]>(() => {
     const result: Edge[] = [];
@@ -431,20 +435,20 @@ export default function LineageGroupGraph({
       const sourceAttrId = tableEndpointAttributeNodeId(
         item.source,
         sourceResolution,
-        systemId
+        open
       );
       const targetAttrId = tableEndpointAttributeNodeId(
         item.target,
         targetResolution,
-        systemId
+        open
       );
 
       const sourceId =
         sourceAttrId ??
-        tableEndpointNodeId(item.source, sourceResolution, systemId);
+        tableEndpointNodeId(item.source, sourceResolution, open);
       const targetId =
         targetAttrId ??
-        tableEndpointNodeId(item.target, targetResolution, systemId);
+        tableEndpointNodeId(item.target, targetResolution, open);
 
       if (!sourceId || !targetId) continue;
 
@@ -480,7 +484,7 @@ export default function LineageGroupGraph({
     }
 
     return result;
-  }, [data, graph, selectedEdgeId, systemId]);
+  }, [data, graph, open, selectedEdgeId]);
 
   const selectedEdge = useMemo(
     () => graph.edges.find((item) => item.id === selectedEdgeId) ?? null,
@@ -512,7 +516,7 @@ export default function LineageGroupGraph({
       tableEndpointAttributeNodeId(
         endpoint,
         resolveEndpoint(endpoint, data),
-        systemId
+        open
       );
 
     return {
@@ -523,11 +527,12 @@ export default function LineageGroupGraph({
         (edge) => nodeIdFor(edge.source) === selectedAttributeId
       ),
     };
-  }, [data, graph, selectedAttributeId, systemId]);
+  }, [data, graph, open, selectedAttributeId]);
 
   return (
     <div className="relative h-[780px] w-full overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7]">
       <ReactFlow
+        key={openSystemIds.join("|")}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -562,7 +567,7 @@ export default function LineageGroupGraph({
                 selectedEdge.source,
                 data,
                 resolveEndpoint(selectedEdge.source, data),
-                systemId
+                open
               )}
             </div>
           </div>
@@ -574,7 +579,7 @@ export default function LineageGroupGraph({
                 selectedEdge.target,
                 data,
                 resolveEndpoint(selectedEdge.target, data),
-                systemId
+                open
               )}
             </div>
           </div>
@@ -651,7 +656,7 @@ export default function LineageGroupGraph({
                         edge.source,
                         data,
                         resolveEndpoint(edge.source, data),
-                        systemId
+                        open
                       )}
                     </div>
 
@@ -685,7 +690,7 @@ export default function LineageGroupGraph({
                         edge.target,
                         data,
                         resolveEndpoint(edge.target, data),
-                        systemId
+                        open
                       )}
                     </div>
 

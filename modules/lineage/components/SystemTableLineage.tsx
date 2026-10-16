@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 import LineageGroupGraph from "./LineageGroupGraph";
@@ -20,26 +20,47 @@ const SCENARIO_LABELS: Record<ScenarioId, string> = {
 
 export default function SystemTableLineage() {
   const [scenarioId, setScenarioId] = useState<ScenarioId>(DEFAULT_SCENARIO_ID);
-  const [selectedSystem, setSelectedSystem] = useState<string | null>(null);
+  const [openSystems, setOpenSystems] = useState<string[]>([]);
   const tableSectionRef = useRef<HTMLElement | null>(null);
 
   const { data, loading, error } = useLineageData(scenarioId);
 
-  const selectedSystemData =
-    data.systems.find((system) => system.id === selectedSystem) ?? null;
+  console.log('data',data)
 
-  // Scroll the table-level view into view whenever the selected system changes.
+  const systemLabel = useMemo(() => {
+    const labels = new Map(data.systems.map((system) => [system.id, system.label]));
+    return (systemId: string) => labels.get(systemId) ?? systemId;
+  }, [data.systems]);
+
+  const firstOpenSystem = openSystems[0] ?? null;
+
+  // Scroll the table-level view into view on a fresh selection, but not when
+  // merely adding or removing a system from the open set.
   useEffect(() => {
-    if (!selectedSystemData) return;
+    if (!firstOpenSystem) return;
     tableSectionRef.current?.scrollIntoView({
       behavior: "smooth",
       block: "start",
     });
-  }, [selectedSystemData]);
+  }, [firstOpenSystem]);
 
   function selectScenario(id: ScenarioId) {
-    setSelectedSystem(null);
+    setOpenSystems([]);
     setScenarioId(id);
+  }
+
+  function selectFromDiagram(systemId: string) {
+    setOpenSystems([systemId]);
+  }
+
+  function expandSystem(systemId: string) {
+    setOpenSystems((current) =>
+      current.includes(systemId) ? current : [...current, systemId]
+    );
+  }
+
+  function closeSystem(systemId: string) {
+    setOpenSystems((current) => current.filter((id) => id !== systemId));
   }
 
   const scenarioPicker = (
@@ -97,32 +118,51 @@ export default function SystemTableLineage() {
       <section className="panel p-5">
         <SystemLineageGraph
           data={data}
-          selectedSystemId={selectedSystem}
-          onSelectSystem={setSelectedSystem}
+          selectedSystemIds={openSystems}
+          onSelectSystem={selectFromDiagram}
         />
       </section>
 
-      {selectedSystemData && (
+      {openSystems.length > 0 && (
         <section
           ref={tableSectionRef}
           className="panel scroll-mt-6 p-5"
           aria-label="Table-level lineage"
         >
           <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div>
+            <div className="min-w-0">
               <h2 className="text-lg font-bold tracking-tight text-ink sm:text-xl">
-                {selectedSystemData.label} — table lineage
+                Table lineage
               </h2>
 
               <p className="mt-1 text-xs text-slate-500">
-                Only this system&apos;s tables are shown. Click a connected
-                system placeholder to switch to its tables.
+                Showing the tables of every open system. Click a connected
+                system placeholder to add its tables.
               </p>
+
+              <div className="mt-3 flex flex-wrap items-center gap-2">
+                {openSystems.map((systemId) => (
+                  <span
+                    key={systemId}
+                    className="inline-flex items-center gap-2 rounded-full border border-line bg-white py-1 pl-3 pr-1 text-xs font-medium text-ink"
+                  >
+                    {systemLabel(systemId)}
+                    <button
+                      type="button"
+                      onClick={() => closeSystem(systemId)}
+                      aria-label={`Close ${systemLabel(systemId)}`}
+                      className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                    >
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+              </div>
             </div>
 
             <button
               type="button"
-              onClick={() => setSelectedSystem(null)}
+              onClick={() => setOpenSystems([])}
               className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink transition hover:bg-slate-50"
             >
               <X size={16} />
@@ -132,8 +172,8 @@ export default function SystemTableLineage() {
 
           <LineageGroupGraph
             data={data}
-            systemId={selectedSystemData.id}
-            onSelectSystem={setSelectedSystem}
+            openSystemIds={openSystems}
+            onExpandSystem={expandSystem}
           />
         </section>
       )}

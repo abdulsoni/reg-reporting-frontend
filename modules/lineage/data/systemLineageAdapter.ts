@@ -112,9 +112,9 @@ export type TableGraphExternal = {
 };
 
 export type LineageGraphTables = {
-  /** Tables that should be rendered for the selected system view (its own only). */
+  /** Tables for every currently open system (their own only). */
   tables: LineageTable[];
-  /** External systems referenced by relevant edges, rendered as placeholders. */
+  /** Systems referenced by relevant edges but not open, rendered as placeholders. */
   externals: TableGraphExternal[];
   /** Relevant edges whose endpoints can all be represented. */
   edges: LineageEdge[];
@@ -159,39 +159,43 @@ function classifyExternal(
 }
 
 /**
- * Decide which tables, placeholder systems and edges belong in a system's
- * table-level view. Only the selected system's own tables are included; every
- * other system an edge points at becomes a placeholder. Selecting another
- * system (rather than expanding it inline) is what reveals its tables.
+ * Decide which tables, placeholder systems and edges belong in the table-level
+ * view. Tables for every open system are included; any system an edge points at
+ * that is not yet open becomes a placeholder. Opening that placeholder adds its
+ * tables rather than replacing the current ones.
  */
 export function buildTableGraph(
   data: LineageData,
-  systemId: string
+  openSystemIds: string[]
 ): LineageGraphTables {
-  const tables = data.tables.filter((table) => table.systemId === systemId);
+  const open = new Set(openSystemIds);
+  const tables = data.tables.filter((table) => open.has(table.systemId));
   const externals = new Map<string, TableGraphExternal>();
 
-  for (const edge of relevantEdgesForSystem(data, systemId)) {
+  const relevantEdges = data.lineageEdges.filter(
+    (edge) => open.has(edge.source.systemId) || open.has(edge.target.systemId)
+  );
+
+  for (const edge of relevantEdges) {
     for (const endpoint of [edge.source, edge.target]) {
-      if (endpoint.systemId === systemId) continue;
+      if (open.has(endpoint.systemId)) continue;
 
       const external = classifyExternal(endpoint.systemId, data);
       if (external) externals.set(endpoint.systemId, external);
     }
   }
 
-  const edges = relevantEdgesForSystem(data, systemId).filter((edge) => {
-    const sourceOk =
-      edge.source.systemId === systemId
-        ? resolveEndpoint(edge.source, data).kind === "resolved"
-        : resolveEndpoint(edge.source, data).kind !== "unresolved";
-    const targetOk =
-      edge.target.systemId === systemId
-        ? resolveEndpoint(edge.target, data).kind === "resolved"
-        : resolveEndpoint(edge.target, data).kind !== "unresolved";
+  const edges = relevantEdges.filter((edge) =>
+    [edge.source, edge.target].every((endpoint) => {
+      const resolution = resolveEndpoint(endpoint, data);
 
-    return sourceOk && targetOk;
-  });
+      if (open.has(endpoint.systemId)) {
+        return resolution.kind === "resolved";
+      }
+
+      return resolution.kind !== "unresolved";
+    })
+  );
 
   return {
     tables,
@@ -200,28 +204,28 @@ export function buildTableGraph(
   };
 }
 
-/** Table-level node id for a table-view endpoint (real table or placeholder). */
+/** Table-level node id for a table-view endpoint (open table or placeholder). */
 export function tableEndpointNodeId(
   endpoint: LineageEndpoint,
   resolution: EndpointResolution,
-  selectedSystemId: string
+  open: ReadonlySet<string>
 ): string | null {
   if (resolution.kind === "unresolved") return null;
 
-  if (endpoint.systemId === selectedSystemId) {
+  if (open.has(endpoint.systemId)) {
     return resolution.kind === "resolved" ? endpoint.tableId : null;
   }
 
   return externalSystemNodeId(endpoint.systemId);
 }
 
-/** Attribute-level node id, only for endpoints belonging to the selected system. */
+/** Attribute-level node id, only for endpoints belonging to an open system. */
 export function tableEndpointAttributeNodeId(
   endpoint: LineageEndpoint,
   resolution: EndpointResolution,
-  selectedSystemId: string
+  open: ReadonlySet<string>
 ): string | null {
-  if (endpoint.systemId !== selectedSystemId) return null;
+  if (!open.has(endpoint.systemId)) return null;
   if (resolution.kind !== "resolved") return null;
   if (!endpoint.tableId || !endpoint.attributeId) return null;
   return `${endpoint.tableId}.${endpoint.attributeId}`;
@@ -281,7 +285,11 @@ export function computeDagreLayout(
   return positions;
 }
 
-export function buildSystemGraph(data: LineageData, selectedSystemId?: string | null) {
+export function buildSystemGraph(
+  data: LineageData,
+  highlightedSystemIds: string[] = []
+) {
+  const highlighted = new Set(highlightedSystemIds);
   const nodes: Array<SystemNode | DependencyNode> = [];
   const layoutEdges: Array<{ source: string; target: string }> = [];
   const connections = new Map<string, Edge>();
@@ -304,7 +312,7 @@ export function buildSystemGraph(data: LineageData, selectedSystemId?: string | 
         description: system.description,
         target: system.target ?? false,
         canExplore: data.tables.some((table) => table.systemId === system.id),
-        selected: system.id === selectedSystemId,
+        selected: highlighted.has(system.id),
         connectionStatus: system.connectionStatus,
         metadataStatus: system.metadataStatus,
       },
