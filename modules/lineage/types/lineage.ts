@@ -144,6 +144,33 @@ export type SystemDescriptor = {
   database_file: string;
 };
 
+export const CONNECTION_STATUSES = [
+  "connected",
+  "not_connected",
+  "connection_error",
+] as const;
+
+export type ConnectionStatus = (typeof CONNECTION_STATUSES)[number];
+
+export const METADATA_STATUSES = [
+  "available",
+  "unavailable",
+  "partial",
+  "not_scanned",
+] as const;
+
+export type MetadataStatus = (typeof METADATA_STATUSES)[number];
+
+export const LINEAGE_EDGE_STATUSES = [
+  "confirmed",
+  "inferred",
+  "ambiguous",
+  "external_dependency",
+  "metadata_missing",
+] as const;
+
+export type LineageEdgeStatus = (typeof LINEAGE_EDGE_STATUSES)[number];
+
 /** A column discovered while tracing a system's tables. */
 export type LineageAttribute = {
   id: string;
@@ -158,6 +185,7 @@ export type LineageTable = {
   id: string;
   name: string;
   systemId: string;
+  schema?: string;
   attributes: LineageAttribute[];
 };
 
@@ -165,25 +193,65 @@ export type LineageSystem = {
   id: string;
   label: string;
   description: string;
+  connectionStatus: ConnectionStatus;
+  metadataStatus: MetadataStatus;
   target?: boolean;
+};
+
+/**
+ * A fully qualified reference to a table or attribute. Keeping system, table
+ * and attribute ids together means identically named attributes in different
+ * tables can never be confused.
+ */
+export type LineageEndpoint = {
+  systemId: string;
+  tableId: string | null;
+  attributeId: string | null;
+  attributeName?: string;
+};
+
+export type LineageJoinCondition = {
+  sourceTableId: string;
+  sourceAttributeId: string;
+  targetTableId: string;
+  targetAttributeId: string;
+  operator: string;
 };
 
 export type LineageEdge = {
   id: string;
-  source: string;
-  target: string;
-  sourceTable: string;
-  targetTable: string;
-  sourceSystemId: string;
-  targetSystemId: string;
+  kind: "attribute" | "table";
+  source: LineageEndpoint;
+  target: LineageEndpoint;
   transformation: string;
-  description: string;
+  description?: string;
+  status: LineageEdgeStatus;
+  joinConditions?: LineageJoinCondition[];
 };
 
-/** The full lineage graph returned by GET /api/lineage. */
+/**
+ * A system referenced by lineage that is not itself included in the graph
+ * response, either because it is not connected or its metadata is unavailable.
+ * The frontend renders these as "Please connect" placeholders.
+ */
+export type LineageDependency = {
+  systemId: string;
+  systemName: string;
+  connectionStatus: ConnectionStatus;
+  metadataStatus: MetadataStatus;
+  message: string;
+};
+
+/** The full lineage graph returned by GET /api/lineage/graph. */
 export type LineageData = {
-  database: string;
+  version: string;
+  metadata: {
+    rootSystemId: string;
+    generatedAt: string;
+    layout: string;
+  };
   systems: LineageSystem[];
   tables: LineageTable[];
-  edges: LineageEdge[];
+  lineageEdges: LineageEdge[];
+  dependencies: LineageDependency[];
 };
