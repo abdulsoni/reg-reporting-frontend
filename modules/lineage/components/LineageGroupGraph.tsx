@@ -34,6 +34,10 @@ import {
   tableEndpointNodeId,
   type TableGraphExternalKind,
 } from "../data/systemLineageAdapter";
+import {
+  endpointKey,
+  type UpstreamTrace,
+} from "../lib/reverseLineage";
 
 import { LineageGroup, type LineageGroupNode } from "./LineageGroup";
 
@@ -45,23 +49,29 @@ type AttributeNodeData = {
   table: string;
   transformation: string;
   selected?: boolean;
+  highlighted?: boolean;
+  isTraceTarget?: boolean;
   onSelect?: (id: string) => void;
 };
 
 type AttributeNode = Node<AttributeNodeData, "attribute">;
 
 function AttributeField({ id, data }: NodeProps<AttributeNode>) {
+  const frame = data.isTraceTarget
+    ? "border-blue-600 bg-blue-50 ring-2 ring-blue-400/60"
+    : data.highlighted
+      ? "border-blue-400 bg-blue-50/70 ring-1 ring-blue-200"
+      : data.selected
+        ? "border-slate-900 bg-white ring-2 ring-slate-900/10"
+        : "border-slate-300 bg-white hover:border-slate-400";
+
   return (
     <div
       onClick={(event) => {
         event.stopPropagation();
         data.onSelect?.(id);
       }}
-      className={`flex h-full w-full cursor-pointer items-center rounded-md border bg-white px-3 shadow-sm transition-colors ${
-        data.selected
-          ? "border-slate-900 ring-2 ring-slate-900/10"
-          : "border-slate-300 hover:border-slate-400"
-      }`}
+      className={`flex h-full w-full cursor-pointer items-center rounded-md border px-3 shadow-sm transition-colors ${frame}`}
     >
       <Handle
         id={`${id.split(".").pop()}-in`}
@@ -101,6 +111,7 @@ type PlaceholderNodeData = {
   label: string;
   message: string;
   kind: TableGraphExternalKind;
+  highlighted?: boolean;
   onSelect?: () => void;
 };
 
@@ -137,6 +148,9 @@ function PlaceholderField({ data }: NodeProps<PlaceholderNode>) {
   const style = PLACEHOLDER_STYLES[data.kind];
   const Icon = style.icon;
   const interactive = Boolean(data.onSelect);
+  const frame = data.highlighted
+    ? "border-blue-500 bg-blue-50/80 ring-2 ring-blue-300/70"
+    : style.frame;
 
   return (
     <div
@@ -148,9 +162,9 @@ function PlaceholderField({ data }: NodeProps<PlaceholderNode>) {
             }
           : undefined
       }
-      className={`flex h-full w-full items-center gap-3 rounded-md border px-3 shadow-sm transition ${
-        style.frame
-      } ${interactive ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-sky-200" : ""}`}
+      className={`flex h-full w-full items-center gap-3 rounded-md border px-3 shadow-sm transition ${frame} ${
+        interactive ? "cursor-pointer hover:shadow-md hover:ring-2 hover:ring-sky-200" : ""
+      }`}
     >
       <Handle
         type="target"
@@ -235,7 +249,7 @@ type DetailPanelProps = {
 
 function DetailPanel({ title, onClose, children }: DetailPanelProps) {
   return (
-    <div className="absolute bottom-4 right-4 z-10 w-[min(360px,calc(100%-32px))] rounded-xl border border-line bg-white p-4 shadow-xl">
+    <div className="absolute bottom-4 right-4 z-10 max-h-[calc(100%-48px)] w-[min(420px,calc(100%-32px))] overflow-y-auto rounded-xl border border-line bg-white p-4 shadow-xl">
       <div className="mb-3 flex items-center justify-between">
         <h3 className="font-semibold text-ink">{title}</h3>
 
@@ -281,14 +295,48 @@ function formatEndpoint(
   return endpoint.systemId;
 }
 
+/** Fully qualified label: `systemLabel.tableName.attributeName`. */
+function formatQualified(
+  endpoint: LineageEndpoint,
+  data: LineageData,
+  resolution: ReturnType<typeof resolveEndpoint>
+): string {
+  const system = data.systems.find((item) => item.id === endpoint.systemId);
+  const owner = system?.label ?? endpoint.systemId;
+
+  if (resolution.kind === "resolved") {
+    return endpoint.attributeId
+      ? `${owner}.${resolution.table.name}.${endpoint.attributeId}`
+      : `${owner}.${resolution.table.name}`;
+  }
+
+  if (resolution.kind === "dependency") {
+    return `${resolution.dependency.systemName}${
+      endpoint.attributeId ? `.${endpoint.attributeId}` : ""
+    }`;
+  }
+
+  if (resolution.kind === "metadata_unavailable") {
+    return `${resolution.system.label}${
+      endpoint.attributeId ? `.${endpoint.attributeId}` : ""
+    }`;
+  }
+
+  return `${owner}${endpoint.attributeId ? `.${endpoint.attributeId}` : ""}`;
+}
+
 export default function LineageGroupGraph({
   data,
   openSystemIds,
   onExpandSystem,
+  highlight,
+  onClearHighlight,
 }: {
   data: LineageData;
   openSystemIds: string[];
   onExpandSystem?: (systemId: string) => void;
+  highlight?: UpstreamTrace | null;
+  onClearHighlight?: () => void;
 }) {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedAttributeId, setSelectedAttributeId] = useState<string | null>(
@@ -300,6 +348,21 @@ export default function LineageGroupGraph({
     () => buildTableGraph(data, openSystemIds),
     [data, openSystemIds]
   );
+
+  const traceActive = Boolean(highlight);
+
+  /** Tables containing at least one attribute on the traced path. */
+  const highlightedTables = useMemo(() => {
+    const tables = new Set<string>();
+    if (!highlight) return tables;
+
+    for (const nodeId of highlight.attributeNodeIds) {
+      const separator = nodeId.lastIndexOf(".");
+      if (separator > 0) tables.add(nodeId.slice(0, separator));
+    }
+
+    return tables;
+  }, [highlight]);
 
   function clearSelection() {
     setSelectedEdgeId(null);
@@ -351,25 +414,39 @@ export default function LineageGroupGraph({
   }, [data, graph, open]);
 
   const nodes = useMemo(() => {
-    const groupNodes: LineageGroupNode[] = graph.tables.map((table) => ({
-      id: table.id,
-      type: "lineageGroup",
-      position: layoutPositions[table.id] ?? { x: 0, y: 0 },
-      style: {
-        width: 300,
-        height: 72 + table.attributes.length * 64,
-      },
-      data: {
-        label: table.name,
-        attributeCount: table.attributes.length,
-      },
-      draggable: true,
-      selectable: false,
-    }));
+    const selectedTableId = selectedAttributeId
+      ? selectedAttributeId.slice(0, selectedAttributeId.lastIndexOf("."))
+      : null;
+
+    const groupNodes: LineageGroupNode[] = graph.tables.map((table) => {
+      const dimmed =
+        traceActive &&
+        !highlightedTables.has(table.id) &&
+        selectedTableId !== table.id;
+
+      return {
+        id: table.id,
+        type: "lineageGroup",
+        position: layoutPositions[table.id] ?? { x: 0, y: 0 },
+        style: {
+          width: 300,
+          height: 72 + table.attributes.length * 64,
+          opacity: dimmed ? 0.35 : 1,
+        },
+        data: {
+          label: table.name,
+          attributeCount: table.attributes.length,
+        },
+        draggable: true,
+        selectable: false,
+      };
+    });
 
     const attributeNodes: AttributeNode[] = graph.tables.flatMap((table) =>
       table.attributes.map((attribute: Attribute, index: number) => {
         const nodeId = `${table.id}.${attribute.id}`;
+        const onPath = highlight?.attributeNodeIds.has(nodeId) ?? false;
+        const dimmed = traceActive && !onPath && selectedAttributeId !== nodeId;
 
         return {
           id: nodeId,
@@ -383,6 +460,7 @@ export default function LineageGroupGraph({
           style: {
             width: 268,
             height: 44,
+            opacity: dimmed ? 0.35 : 1,
           },
           data: {
             label: attribute.name,
@@ -390,6 +468,8 @@ export default function LineageGroupGraph({
             table: table.name,
             transformation: attribute.transformation,
             selected: selectedAttributeId === nodeId,
+            highlighted: onPath,
+            isTraceTarget: highlight?.targetNodeId === nodeId,
             onSelect: (id: string) => {
               setSelectedAttributeId(id);
               setSelectedEdgeId(null);
@@ -401,29 +481,43 @@ export default function LineageGroupGraph({
     );
 
     const placeholderNodes: PlaceholderNode[] = graph.externals.map(
-      (external) => ({
-        id: externalSystemNodeId(external.systemId),
-        type: "placeholder" as const,
-        position: layoutPositions[externalSystemNodeId(external.systemId)] ?? {
-          x: 0,
-          y: 0,
-        },
-        style: { width: 240, height: 96 },
-        data: {
-          label: external.label,
-          message: external.message,
-          kind: external.kind,
-          onSelect:
-            external.kind === "connected" && onExpandSystem
-              ? () => onExpandSystem(external.systemId)
-              : undefined,
-        },
-        selectable: false,
-      })
+      (external) => {
+        const onPath = highlight?.boundarySystemIds.has(external.systemId) ?? false;
+        const dimmed = traceActive && !onPath;
+
+        return {
+          id: externalSystemNodeId(external.systemId),
+          type: "placeholder" as const,
+          position: layoutPositions[externalSystemNodeId(external.systemId)] ?? {
+            x: 0,
+            y: 0,
+          },
+          style: { width: 240, height: 96, opacity: dimmed ? 0.35 : 1 },
+          data: {
+            label: external.label,
+            message: external.message,
+            kind: external.kind,
+            highlighted: onPath,
+            onSelect:
+              external.kind === "connected" && onExpandSystem
+                ? () => onExpandSystem(external.systemId)
+                : undefined,
+          },
+          selectable: false,
+        };
+      }
     );
 
     return [...groupNodes, ...attributeNodes, ...placeholderNodes];
-  }, [graph, layoutPositions, selectedAttributeId, onExpandSystem]);
+  }, [
+    graph,
+    layoutPositions,
+    selectedAttributeId,
+    onExpandSystem,
+    highlight,
+    highlightedTables,
+    traceActive,
+  ]);
 
   const edges = useMemo<Edge[]>(() => {
     const result: Edge[] = [];
@@ -453,7 +547,19 @@ export default function LineageGroupGraph({
       if (!sourceId || !targetId) continue;
 
       const selected = item.id === selectedEdgeId;
+      const onPath = highlight?.edgeIds.has(item.id) ?? false;
       const isSameTable = item.source.tableId === item.target.tableId;
+
+      const stroke = selected ? "#0f172a" : onPath ? "#2563eb" : "#64748b";
+      const opacity = selected
+        ? 1
+        : traceActive
+          ? onPath
+            ? 1
+            : 0.15
+          : selectedEdgeId
+            ? 0.25
+            : 1;
 
       result.push({
         id: item.id,
@@ -472,19 +578,19 @@ export default function LineageGroupGraph({
           type: MarkerType.ArrowClosed,
           width: 14,
           height: 14,
-          color: selected ? "#0f172a" : "#64748b",
+          color: stroke,
         },
         style: {
-          stroke: selected ? "#0f172a" : "#64748b",
-          strokeWidth: selected ? 3 : 1.7,
-          opacity: selectedEdgeId && !selected ? 0.25 : 1,
+          stroke,
+          strokeWidth: selected || onPath ? 3 : 1.7,
+          opacity,
         },
-        zIndex: selected ? 10 : 1,
+        zIndex: selected || onPath ? 10 : 1,
       });
     }
 
     return result;
-  }, [data, graph, open, selectedEdgeId]);
+  }, [data, graph, open, selectedEdgeId, highlight, traceActive]);
 
   const selectedEdge = useMemo(
     () => graph.edges.find((item) => item.id === selectedEdgeId) ?? null,
@@ -529,6 +635,109 @@ export default function LineageGroupGraph({
     };
   }, [data, graph, open, selectedAttributeId]);
 
+  const traceTargetResolution = highlight
+    ? resolveEndpoint(highlight.target, data)
+    : null;
+  const traceTargetHops = highlight
+    ? (highlight.parents.get(endpointKey(highlight.target)) ?? [])
+    : [];
+
+  /**
+   * Render the upstream path as a reverse tree: the target column first, then
+   * every source feeding it nested underneath. `seen` stops cycles recorded in
+   * the metadata from recursing forever.
+   */
+  function renderTracePath(
+    endpoint: LineageEndpoint,
+    producingEdge: LineageEdge | null,
+    depth: number,
+    seen: ReadonlySet<string>,
+    nodeKey: string
+  ): React.ReactNode {
+    if (!highlight) return null;
+
+    const resolution = resolveEndpoint(endpoint, data);
+    const idKey = endpointKey(endpoint);
+    const isLoop = seen.has(idKey);
+
+    const nextSeen = new Set(seen);
+    nextSeen.add(idKey);
+
+    const hops = isLoop ? [] : (highlight.parents.get(idKey) ?? []);
+    const boundary = isLoop
+      ? undefined
+      : highlight.boundaries.find(
+          (item) => endpointKey(item.endpoint) === idKey
+        );
+    const isTarget = depth === 0;
+
+    return (
+      <li key={nodeKey}>
+        <div
+          className={`rounded-md border p-2 ${
+            boundary
+              ? "border-amber-300 bg-amber-50/70"
+              : isTarget
+                ? "border-blue-500 bg-blue-50/70"
+                : "border-slate-200 bg-white"
+          }`}
+        >
+          <div className="flex items-start justify-between gap-2">
+            <span className="min-w-0 break-all font-mono text-[11px] font-semibold text-slate-800">
+              {formatQualified(endpoint, data, resolution)}
+            </span>
+
+            {producingEdge && (
+              <span className="shrink-0 rounded-full bg-slate-100 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wide text-slate-500">
+                {producingEdge.status.replace(/_/g, " ")}
+              </span>
+            )}
+          </div>
+
+          {producingEdge && (
+            <div className="mt-0.5 break-all font-mono text-[10px] text-slate-500">
+              {producingEdge.transformation}
+            </div>
+          )}
+
+          {isTarget &&
+            resolution.kind === "resolved" &&
+            resolution.attribute?.transformation && (
+              <div className="mt-0.5 break-all font-mono text-[10px] text-slate-500">
+                {resolution.attribute.transformation}
+              </div>
+            )}
+
+          {boundary && (
+            <div className="mt-0.5 text-[10px] leading-snug text-amber-700">
+              {boundary.message}
+            </div>
+          )}
+
+          {isLoop && (
+            <div className="mt-0.5 text-[10px] text-slate-400">
+              Loop detected — path stops here.
+            </div>
+          )}
+        </div>
+
+        {hops.length > 0 && (
+          <ul className="ml-3 mt-1 space-y-1 border-l-2 border-blue-100 pl-2">
+            {hops.map((hop, index) =>
+              renderTracePath(
+                hop.source,
+                hop.edge,
+                depth + 1,
+                nextSeen,
+                `${idKey}-${index}`
+              )
+            )}
+          </ul>
+        )}
+      </li>
+    );
+  }
+
   return (
     <div className="relative h-[780px] w-full overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7]">
       <ReactFlow
@@ -541,7 +750,10 @@ export default function LineageGroupGraph({
           setSelectedEdgeId(edge.id);
           setSelectedAttributeId(null);
         }}
-        onPaneClick={clearSelection}
+        onPaneClick={() => {
+          clearSelection();
+          if (traceActive) onClearHighlight?.();
+        }}
         fitView
         fitViewOptions={{ padding: 0.12 }}
         minZoom={0.25}
@@ -706,6 +918,110 @@ export default function LineageGroupGraph({
               </p>
             )}
           </div>
+        </DetailPanel>
+      ) : highlight ? (
+        <DetailPanel
+          title="Lineage path"
+          onClose={() => onClearHighlight?.()}
+        >
+          {highlight.incomplete && (
+            <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-[11px] leading-snug text-amber-800">
+              <span className="font-semibold">Path incomplete.</span>{" "}
+              Upstream metadata is unavailable for{" "}
+              {highlight.boundaries.length === 1
+                ? "1 source system"
+                : `${highlight.boundaries.length} source systems`}
+              :
+              <ul className="mt-1 list-disc space-y-0.5 pl-4">
+                {highlight.boundaries.map((boundary) => (
+                  <li key={endpointKey(boundary.endpoint)}>
+                    <span className="font-semibold">{boundary.label}</span> —{" "}
+                    {boundary.kind === "dependency"
+                      ? "not connected"
+                      : boundary.kind === "metadata_unavailable"
+                        ? "metadata unavailable"
+                        : "no metadata"}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          <div>
+            <div className="text-xs text-slate-500">Target column</div>
+
+            <div className="flex items-center justify-between gap-3">
+              <span className="min-w-0 break-all font-mono text-xs font-bold text-blue-700">
+                {traceTargetResolution
+                  ? formatQualified(highlight.target, data, traceTargetResolution)
+                  : highlight.target.systemId}
+              </span>
+
+              {traceTargetResolution?.kind === "resolved" &&
+                traceTargetResolution.attribute && (
+                  <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
+                    {traceTargetResolution.attribute.dataType}
+                  </span>
+                )}
+            </div>
+
+            {traceTargetResolution?.kind === "resolved" &&
+              traceTargetResolution.attribute?.transformation && (
+                <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-slate-100 p-3 text-xs">
+                  {traceTargetResolution.attribute.transformation}
+                </pre>
+              )}
+          </div>
+
+          <div>
+            <div className="text-xs text-slate-500">
+              Immediate sources ({traceTargetHops.length})
+            </div>
+
+            {traceTargetHops.length > 0 ? (
+              <ul className="mt-1 space-y-1.5">
+                {traceTargetHops.map((hop, index) => (
+                  <li
+                    key={`${endpointKey(hop.source)}-${index}`}
+                    className="rounded-md border border-slate-200 p-2"
+                  >
+                    <div className="break-all font-mono text-xs font-semibold text-slate-800">
+                      {formatQualified(
+                        hop.source,
+                        data,
+                        resolveEndpoint(hop.source, data)
+                      )}
+                    </div>
+
+                    <div className="mt-0.5 text-[11px] text-slate-500">
+                      {hop.edge.description}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="mt-1 text-[11px] text-slate-500">
+                Source column — no upstream lineage.
+              </p>
+            )}
+          </div>
+
+          <div>
+            <div className="text-xs text-slate-500">
+              Complete upstream path
+            </div>
+
+            <ul className="mt-1">
+              {renderTracePath(highlight.target, null, 0, new Set(), "root")}
+            </ul>
+          </div>
+
+          <p className="text-[10px] text-slate-400">
+            Highlighting {highlight.attributeNodeIds.size}{" "}
+            {highlight.attributeNodeIds.size === 1 ? "column" : "columns"} and{" "}
+            {highlight.edgeIds.size}{" "}
+            {highlight.edgeIds.size === 1 ? "edge" : "edges"}.
+          </p>
         </DetailPanel>
       ) : null}
     </div>

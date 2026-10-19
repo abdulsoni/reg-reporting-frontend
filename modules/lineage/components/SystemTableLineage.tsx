@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { X } from "lucide-react";
 
 import LineageGroupGraph from "./LineageGroupGraph";
+import LineageSearch from "./LineageSearch";
 import SystemLineageGraph from "./SystemLineageGraph";
 import { useLineageData } from "../hooks/useLineageData";
 import {
@@ -11,6 +12,11 @@ import {
   SCENARIO_IDS,
   type ScenarioId,
 } from "../data/scenarios";
+import {
+  collectUpstreamTrace,
+  type AttributeSearchEntry,
+  type UpstreamTrace,
+} from "../lib/reverseLineage";
 
 const SCENARIO_LABELS: Record<ScenarioId, string> = {
   A: "normalized_data only",
@@ -21,11 +27,14 @@ const SCENARIO_LABELS: Record<ScenarioId, string> = {
 export default function SystemTableLineage() {
   const [scenarioId, setScenarioId] = useState<ScenarioId>(DEFAULT_SCENARIO_ID);
   const [openSystems, setOpenSystems] = useState<string[]>([]);
+  const [activeTrace, setActiveTrace] = useState<{
+    entry: AttributeSearchEntry;
+    trace: UpstreamTrace;
+  } | null>(null);
+  const [scrollTick, setScrollTick] = useState(0);
   const tableSectionRef = useRef<HTMLElement | null>(null);
 
   const { data, loading, error } = useLineageData(scenarioId);
-
-  console.log('data',data)
 
   const systemLabel = useMemo(() => {
     const labels = new Map(data.systems.map((system) => [system.id, system.label]));
@@ -44,9 +53,44 @@ export default function SystemTableLineage() {
     });
   }, [firstOpenSystem]);
 
+  // A search always brings the traced path into view, even when systems were
+  // already open.
+  useEffect(() => {
+    if (scrollTick === 0) return;
+    tableSectionRef.current?.scrollIntoView({
+      behavior: "smooth",
+      block: "start",
+    });
+  }, [scrollTick]);
+
   function selectScenario(id: ScenarioId) {
     setOpenSystems([]);
+    setActiveTrace(null);
     setScenarioId(id);
+  }
+
+  function handleSearchSelect(entry: AttributeSearchEntry) {
+    const trace = collectUpstreamTrace(data, {
+      systemId: entry.systemId,
+      tableId: entry.tableId,
+      attributeId: entry.attributeId,
+    });
+
+    setActiveTrace({ entry, trace });
+    setOpenSystems((current) => {
+      const next = new Set(current);
+      for (const systemId of trace.pathSystemIds) next.add(systemId);
+      const merged = Array.from(next);
+      return merged.length === current.length &&
+        merged.every((id, i) => id === current[i])
+        ? current
+        : merged;
+    });
+    setScrollTick((tick) => tick + 1);
+  }
+
+  function clearSearchTrace() {
+    setActiveTrace(null);
   }
 
   function selectFromDiagram(systemId: string) {
@@ -60,7 +104,15 @@ export default function SystemTableLineage() {
   }
 
   function closeSystem(systemId: string) {
-    setOpenSystems((current) => current.filter((id) => id !== systemId));
+    const next = openSystems.filter((id) => id !== systemId);
+    setOpenSystems(next);
+    // The highlight is meaningless once the table view is gone.
+    if (next.length === 0) setActiveTrace(null);
+  }
+
+  function clearOpenSystems() {
+    setOpenSystems([]);
+    setActiveTrace(null);
   }
 
   const scenarioPicker = (
@@ -107,6 +159,20 @@ export default function SystemTableLineage() {
         </div>
 
         {scenarioPicker}
+      </div>
+
+      <div className="flex flex-wrap items-center gap-3">
+        <LineageSearch data={data} onSelect={handleSearchSelect} />
+
+        {activeTrace && (
+          <button
+            type="button"
+            onClick={clearSearchTrace}
+            className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-100"
+          >
+            Tracing {activeTrace.entry.attributeName} — clear path
+          </button>
+        )}
       </div>
 
       {error && (
@@ -162,7 +228,7 @@ export default function SystemTableLineage() {
 
             <button
               type="button"
-              onClick={() => setOpenSystems([])}
+              onClick={clearOpenSystems}
               className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink transition hover:bg-slate-50"
             >
               <X size={16} />
@@ -174,6 +240,8 @@ export default function SystemTableLineage() {
             data={data}
             openSystemIds={openSystems}
             onExpandSystem={expandSystem}
+            highlight={activeTrace?.trace ?? null}
+            onClearHighlight={clearSearchTrace}
           />
         </section>
       )}
