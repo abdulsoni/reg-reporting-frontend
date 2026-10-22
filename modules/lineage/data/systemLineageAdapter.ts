@@ -346,7 +346,7 @@ export function buildSystemGraph(
         id,
         source,
         target,
-        markerEnd: { type: MarkerType.ArrowClosed },
+        markerStart: { type: MarkerType.ArrowClosed },
       });
     }
   }

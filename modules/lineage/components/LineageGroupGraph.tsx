@@ -204,7 +204,7 @@ function LineageEdgePath(props: EdgeProps) {
     targetY,
     sourcePosition,
     targetPosition,
-    markerEnd,
+    markerStart,
     style,
     data,
   } = props;
@@ -228,7 +228,7 @@ function LineageEdgePath(props: EdgeProps) {
     });
   }
 
-  return <BaseEdge id={id} path={path} markerEnd={markerEnd} style={style} />;
+  return <BaseEdge id={id} path={path} markerStart={markerStart} style={style} />;
 }
 
 const edgeTypes = {
@@ -574,7 +574,7 @@ export default function LineageGroupGraph({
         type: isSameTable ? "lineage" : undefined,
         data: { ...item, sameTable: isSameTable },
         animated: selected,
-        markerEnd: {
+        markerStart: {
           type: MarkerType.ArrowClosed,
           width: 14,
           height: 14,
