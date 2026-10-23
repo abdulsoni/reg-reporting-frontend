@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { useCallback, useState } from "react";
 
-import LineageGroupGraph from "./LineageGroupGraph";
 import LineageSearch from "./LineageSearch";
 import SystemLineageGraph from "./SystemLineageGraph";
 import { useLineageData } from "../hooks/useLineageData";
@@ -17,6 +15,10 @@ import {
   type AttributeSearchEntry,
   type UpstreamTrace,
 } from "../lib/reverseLineage";
+import {
+  deriveTraceExpansion,
+  traceUsesTable,
+} from "../lib/systemGraphHighlight";
 
 const SCENARIO_LABELS: Record<ScenarioId, string> = {
   A: "normalized_data only",
@@ -26,93 +28,100 @@ const SCENARIO_LABELS: Record<ScenarioId, string> = {
 
 export default function SystemTableLineage() {
   const [scenarioId, setScenarioId] = useState<ScenarioId>(DEFAULT_SCENARIO_ID);
-  const [openSystems, setOpenSystems] = useState<string[]>([]);
+  const [expandedSystems, setExpandedSystems] = useState<string[]>([]);
+  const [expandedTables, setExpandedTables] = useState<string[]>([]);
   const [activeTrace, setActiveTrace] = useState<{
     entry: AttributeSearchEntry;
     trace: UpstreamTrace;
   } | null>(null);
-  const [scrollTick, setScrollTick] = useState(0);
-  const tableSectionRef = useRef<HTMLElement | null>(null);
 
   const { data, loading, error } = useLineageData(scenarioId);
 
-  const systemLabel = useMemo(() => {
-    const labels = new Map(data.systems.map((system) => [system.id, system.label]));
-    return (systemId: string) => labels.get(systemId) ?? systemId;
-  }, [data.systems]);
+  const toggleSystem = useCallback(
+    (systemId: string) => {
+      const wasExpanded = expandedSystems.includes(systemId);
 
-  const firstOpenSystem = openSystems[0] ?? null;
+      setExpandedSystems((current) =>
+        wasExpanded
+          ? current.filter((id) => id !== systemId)
+          : [...current, systemId]
+      );
 
-  // Scroll the table-level view into view on a fresh selection, but not when
-  // merely adding or removing a system from the open set.
-  useEffect(() => {
-    if (!firstOpenSystem) return;
-    tableSectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, [firstOpenSystem]);
+      if (!wasExpanded) return;
 
-  // A search always brings the traced path into view, even when systems were
-  // already open.
-  useEffect(() => {
-    if (scrollTick === 0) return;
-    tableSectionRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-  }, [scrollTick]);
+      const tableIds = new Set(
+        data.tables
+          .filter((table) => table.systemId === systemId)
+          .map((table) => table.id)
+      );
+
+      setExpandedTables((current) =>
+        current.filter((tableId) => !tableIds.has(tableId))
+      );
+
+      if (activeTrace?.trace.pathSystemIds.has(systemId)) {
+        setActiveTrace(null);
+      }
+    },
+    [activeTrace, data.tables, expandedSystems]
+  );
+
+  const toggleTable = useCallback(
+    (tableId: string) => {
+      const wasExpanded = expandedTables.includes(tableId);
+
+      setExpandedTables((current) =>
+        wasExpanded
+          ? current.filter((id) => id !== tableId)
+          : [...current, tableId]
+      );
+
+      if (
+        wasExpanded &&
+        activeTrace &&
+        traceUsesTable(activeTrace.trace, tableId)
+      ) {
+        setActiveTrace(null);
+      }
+    },
+    [activeTrace, expandedTables]
+  );
+
+  const handleSearchSelect = useCallback(
+    (entry: AttributeSearchEntry) => {
+      const trace = collectUpstreamTrace(data, {
+        systemId: entry.systemId,
+        tableId: entry.tableId,
+        attributeId: entry.attributeId,
+      });
+      const expansion = deriveTraceExpansion(trace, data);
+
+      setActiveTrace({ entry, trace });
+
+      setExpandedSystems((current) => {
+        const next = new Set(current);
+        for (const systemId of expansion.systemIds) next.add(systemId);
+        return Array.from(next);
+      });
+
+      setExpandedTables((current) => {
+        const next = new Set(current);
+        for (const tableId of expansion.tableIds) next.add(tableId);
+        return Array.from(next);
+      });
+    },
+    [data]
+  );
+
+  const clearSearchTrace = useCallback(() => {
+    setActiveTrace(null);
+  }, []);
 
   function selectScenario(id: ScenarioId) {
-    setOpenSystems([]);
+    setExpandedSystems([]);
+    setExpandedTables([]);
     setActiveTrace(null);
     setScenarioId(id);
-  }
-
-  function handleSearchSelect(entry: AttributeSearchEntry) {
-    const trace = collectUpstreamTrace(data, {
-      systemId: entry.systemId,
-      tableId: entry.tableId,
-      attributeId: entry.attributeId,
-    });
-
-    setActiveTrace({ entry, trace });
-    setOpenSystems((current) => {
-      const next = new Set(current);
-      for (const systemId of trace.pathSystemIds) next.add(systemId);
-      const merged = Array.from(next);
-      return merged.length === current.length &&
-        merged.every((id, i) => id === current[i])
-        ? current
-        : merged;
-    });
-    setScrollTick((tick) => tick + 1);
-  }
-
-  function clearSearchTrace() {
-    setActiveTrace(null);
-  }
-
-  function selectFromDiagram(systemId: string) {
-    setOpenSystems([systemId]);
-  }
-
-  function expandSystem(systemId: string) {
-    setOpenSystems((current) =>
-      current.includes(systemId) ? current : [...current, systemId]
-    );
-  }
-
-  function closeSystem(systemId: string) {
-    const next = openSystems.filter((id) => id !== systemId);
-    setOpenSystems(next);
-    // The highlight is meaningless once the table view is gone.
-    if (next.length === 0) setActiveTrace(null);
-  }
-
-  function clearOpenSystems() {
-    setOpenSystems([]);
-    setActiveTrace(null);
   }
 
   const scenarioPicker = (
@@ -154,7 +163,8 @@ export default function SystemTableLineage() {
           </h2>
 
           <p className="mt-1 text-xs text-slate-500">
-            Select a system to explore its table lineage below.
+            Click a database to expand its tables, then click a table to expand
+            its columns.
           </p>
         </div>
 
@@ -183,68 +193,16 @@ export default function SystemTableLineage() {
 
       <section className="panel p-5">
         <SystemLineageGraph
+          key={`${scenarioId}:${activeTrace?.entry.key ?? "none"}`}
           data={data}
-          selectedSystemIds={openSystems}
-          onSelectSystem={selectFromDiagram}
+          expandedSystemIds={expandedSystems}
+          expandedTableIds={expandedTables}
+          highlight={activeTrace?.trace ?? null}
+          onToggleSystem={toggleSystem}
+          onToggleTable={toggleTable}
+          onClearHighlight={clearSearchTrace}
         />
       </section>
-
-      {openSystems.length > 0 && (
-        <section
-          ref={tableSectionRef}
-          className="panel scroll-mt-6 p-5"
-          aria-label="Table-level lineage"
-        >
-          <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
-            <div className="min-w-0">
-              <h2 className="text-lg font-bold tracking-tight text-ink sm:text-xl">
-                Table lineage
-              </h2>
-
-              <p className="mt-1 text-xs text-slate-500">
-                Showing the tables of every open system. Click a connected
-                system placeholder to add its tables.
-              </p>
-
-              <div className="mt-3 flex flex-wrap items-center gap-2">
-                {openSystems.map((systemId) => (
-                  <span
-                    key={systemId}
-                    className="inline-flex items-center gap-2 rounded-full border border-line bg-white py-1 pl-3 pr-1 text-xs font-medium text-ink"
-                  >
-                    {systemLabel(systemId)}
-                    <button
-                      type="button"
-                      onClick={() => closeSystem(systemId)}
-                      aria-label={`Close ${systemLabel(systemId)}`}
-                      className="rounded-full p-1 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
-                    >
-                      <X size={12} />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            </div>
-
-            <button
-              type="button"
-              onClick={clearOpenSystems}
-              className="inline-flex items-center gap-2 rounded-lg border border-line bg-white px-3 py-2 text-sm font-medium text-ink transition hover:bg-slate-50"
-            >
-              <X size={16} />
-              Clear selection
-            </button>
-          </div>
-
-          <LineageGroupGraph
-            data={data}
-            openSystemIds={openSystems}
-            onExpandSystem={expandSystem}
-            highlight={activeTrace?.trace ?? null}
-            onClearHighlight={clearSearchTrace}
-          />
-        </section>
-      )}
     </div>
   );
 }

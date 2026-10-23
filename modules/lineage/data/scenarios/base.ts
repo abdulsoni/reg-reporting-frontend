@@ -24,21 +24,21 @@ export const ROOT_SYSTEM_ID: LineageSystemId = "normalized_data";
 export const systemCatalog: Record<LineageSystemId, LineageSystem> = {
   raw_sensi: {
     id: "raw_sensi",
-    label: "raw_sensi.db",
+    label: "sensi.db",
     description: "Upstream sensitivity source database.",
     connectionStatus: "connected",
     metadataStatus: "available",
   },
   adj_audit: {
     id: "adj_audit",
-    label: "adj_audit.db",
+    label: "audit.db",
     description: "Adjustment audit and approval database.",
     connectionStatus: "connected",
     metadataStatus: "available",
   },
   ref_fx_data: {
     id: "ref_fx_data",
-    label: "ref_fx_data.db",
+    label: "fx_data",
     description: "FX reference rate database.",
     connectionStatus: "connected",
     metadataStatus: "available",
@@ -275,24 +275,24 @@ export const edgeCatalog: LineageEdge[] = [
 const dependencyCatalog: Record<LineageSystemId, LineageDependency> = {
   raw_sensi: {
     systemId: "raw_sensi",
-    systemName: "raw_sensi.db",
+    systemName: "sensi.db",
     connectionStatus: "not_connected",
     metadataStatus: "unavailable",
-    message: "Please connect raw_sensi.db to explore its tables and attributes.",
+    message: "Please connect sensi.db to explore its tables and attributes.",
   },
   adj_audit: {
     systemId: "adj_audit",
-    systemName: "adj_audit.db",
+    systemName: "audit.db",
     connectionStatus: "not_connected",
     metadataStatus: "unavailable",
-    message: "Please connect adj_audit.db to explore its tables and attributes.",
+    message: "Please connect audit.db to explore its tables and attributes.",
   },
   ref_fx_data: {
     systemId: "ref_fx_data",
-    systemName: "ref_fx_data.db",
+    systemName: "fx_data",
     connectionStatus: "not_connected",
     metadataStatus: "unavailable",
-    message: "Please connect ref_fx_data.db to explore its tables and attributes.",
+    message: "Please connect fx_data to explore its tables and attributes.",
   },
   normalized_data: {
     systemId: "normalized_data",

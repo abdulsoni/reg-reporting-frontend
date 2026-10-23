@@ -18,20 +18,64 @@ export type SystemData = {
   description: string;
   target?: boolean;
   canExplore?: boolean;
-  selected?: boolean;
   connectionStatus: ConnectionStatus;
   metadataStatus: MetadataStatus;
+  expanded?: boolean;
+  tableCount?: number;
+  onPath?: boolean;
+  dimmed?: boolean;
+  onToggle?: () => void;
 };
 
-export type SystemNode = Node<SystemData, "system">;
+export type SystemFlowNode = Node<SystemData, "system">;
 
 export type DependencyData = {
   label: string;
   systemName: string;
   message: string;
+  highlighted?: boolean;
+  dimmed?: boolean;
 };
 
-export type DependencyNode = Node<DependencyData, "dependency">;
+export type DependencyFlowNode = Node<DependencyData, "dependency">;
+
+export type TableData = {
+  label: string;
+  systemId: string;
+  tableId: string;
+  attributeCount: number;
+  expanded: boolean;
+  onPath?: boolean;
+  dimmed?: boolean;
+  onToggle?: () => void;
+};
+
+export type TableFlowNode = Node<TableData, "table">;
+
+export type AttributeData = {
+  label: string;
+  dataType: string;
+  transformation: string;
+  status: string;
+  systemId: string;
+  tableId: string;
+  attributeId: string;
+  selected?: boolean;
+  highlighted?: boolean;
+  isTraceTarget?: boolean;
+  dimmed?: boolean;
+};
+
+export type AttributeFlowNode = Node<AttributeData, "attribute">;
+
+export type SystemGraphHighlight = {
+  attributeNodeIds: Set<string>;
+  edgeIds: Set<string>;
+  pathSystemIds: Set<string>;
+  boundarySystemIds: Set<string>;
+  highlightedTableIds: Set<string>;
+  targetNodeId: string | null;
+};
 
 export const DEPENDENCY_NODE_PREFIX = "dep:";
 export const METADATA_NODE_PREFIX = "meta:";
@@ -49,6 +93,20 @@ export function metadataNodeId(systemId: string): string {
 /** Stable React Flow node id for an external system placeholder in table view. */
 export function externalSystemNodeId(systemId: string): string {
   return `${EXTERNAL_SYSTEM_NODE_PREFIX}${systemId}`;
+}
+
+/** Stable React Flow node id for a table nested inside an expanded system. */
+export function tableFlowNodeId(systemId: string, tableId: string): string {
+  return `table:${systemId}:${tableId}`;
+}
+
+/** Stable React Flow node id for an attribute nested inside an expanded table. */
+export function attributeFlowNodeId(
+  systemId: string,
+  tableId: string,
+  attributeId: string
+): string {
+  return `attribute:${systemId}:${tableId}:${attributeId}`;
 }
 
 /**
@@ -285,16 +343,205 @@ export function computeDagreLayout(
   return positions;
 }
 
+export type SystemGraphHandlers = {
+  onToggleSystem?: (systemId: string) => void;
+  onToggleTable?: (tableId: string) => void;
+};
+
+export type SystemGraphOptions = {
+  expandedSystemIds?: readonly string[];
+  expandedTableIds?: readonly string[];
+  highlight?: SystemGraphHighlight | null;
+  handlers?: SystemGraphHandlers;
+};
+
+const SYSTEM_COLLAPSED_WIDTH = 220;
+const SYSTEM_COLLAPSED_HEIGHT = 78;
+const SYSTEM_WIDTH = 332;
+const SYSTEM_HEADER = 64;
+const SYSTEM_PADDING = 14;
+const TABLE_WIDTH = 304;
+const TABLE_HEADER = 44;
+const TABLE_PADDING = 12;
+const ATTR_WIDTH = 280;
+const ATTR_HEIGHT = 44;
+const ATTR_GAP = 8;
+const TABLE_GAP = 12;
+const DEPENDENCY_WIDTH = 240;
+const DEPENDENCY_HEIGHT = 96;
+
+type TableLayout = {
+  table: LineageTable;
+  height: number;
+  expanded: boolean;
+};
+
+type SystemLayout = {
+  system: LineageSystem;
+  tables: TableLayout[];
+  canExplore: boolean;
+  expanded: boolean;
+  width: number;
+  height: number;
+};
+
+type EndpointNode = {
+  nodeId: string;
+  level: "attribute" | "table" | "system" | "dependency";
+  tableId: string | null;
+};
+
+type EdgeGroup = {
+  source: EndpointNode;
+  target: EndpointNode;
+  sourceHandle?: string;
+  targetHandle?: string;
+  edges: LineageEdge[];
+  sameTable: boolean;
+};
+
+function tableHeight(attributeCount: number, expanded: boolean): number {
+  if (!expanded) return TABLE_HEADER + TABLE_PADDING;
+
+  const attributesHeight =
+    attributeCount * ATTR_HEIGHT +
+    Math.max(0, attributeCount - 1) * ATTR_GAP;
+
+  return TABLE_HEADER + TABLE_PADDING * 2 + attributesHeight;
+}
+
+function systemHeight(tables: TableLayout[], expanded: boolean): number {
+  if (!expanded || tables.length === 0) return SYSTEM_COLLAPSED_HEIGHT;
+
+  const tablesHeight =
+    tables.reduce((total, table) => total + table.height, 0) +
+    Math.max(0, tables.length - 1) * TABLE_GAP;
+
+  return SYSTEM_HEADER + SYSTEM_PADDING * 2 + tablesHeight;
+}
+
 export function buildSystemGraph(
   data: LineageData,
-  highlightedSystemIds: string[] = []
+  options: SystemGraphOptions = {}
 ) {
-  const highlighted = new Set(highlightedSystemIds);
-  const nodes: Array<SystemNode | DependencyNode> = [];
-  const layoutEdges: Array<{ source: string; target: string }> = [];
-  const connections = new Map<string, Edge>();
+  const expandedSystems = new Set(options.expandedSystemIds ?? []);
+  const expandedTables = new Set(options.expandedTableIds ?? []);
+  const highlight = options.highlight ?? null;
+  const traceActive = Boolean(highlight);
+  const handlers = options.handlers;
 
-  const nodeIdForSystem = (systemId: string): string | null => {
+  const tablesBySystem = new Map<string, LineageTable[]>();
+
+  for (const table of data.tables) {
+    const bucket = tablesBySystem.get(table.systemId);
+    if (bucket) bucket.push(table);
+    else tablesBySystem.set(table.systemId, [table]);
+  }
+
+  const systemLayouts: SystemLayout[] = data.systems.map((system) => {
+    const tables = tablesBySystem.get(system.id) ?? [];
+    const canExplore = tables.length > 0;
+    const expanded = canExplore && expandedSystems.has(system.id);
+
+    const tableLayouts: TableLayout[] = tables.map((table) => {
+      const expandedTable = expanded && expandedTables.has(table.id);
+
+      return {
+        table,
+        expanded: expandedTable,
+        height: tableHeight(table.attributes.length, expandedTable),
+      };
+    });
+
+    return {
+      system,
+      tables: tableLayouts,
+      canExplore,
+      expanded,
+      width: expanded ? SYSTEM_WIDTH : SYSTEM_COLLAPSED_WIDTH,
+      height: systemHeight(tableLayouts, expanded),
+    };
+  });
+
+  const nodes: Array<SystemFlowNode | DependencyFlowNode> = [];
+  const sizedTopLevel: SizedNode[] = [];
+
+  for (const layout of systemLayouts) {
+    const onPath = highlight
+      ? highlight.pathSystemIds.has(layout.system.id) ||
+        highlight.boundarySystemIds.has(layout.system.id)
+      : false;
+    const dimmed = traceActive && !onPath;
+    const toggleSystem = handlers?.onToggleSystem;
+
+    nodes.push({
+      id: layout.system.id,
+      type: "system",
+      position: { x: 0, y: 0 },
+      style: {
+        width: layout.width,
+        height: layout.height,
+        opacity: dimmed ? 0.35 : 1,
+      },
+      data: {
+        label: layout.system.label,
+        description: layout.system.description,
+        target: layout.system.target ?? false,
+        canExplore: layout.canExplore,
+        connectionStatus: layout.system.connectionStatus,
+        metadataStatus: layout.system.metadataStatus,
+        expanded: layout.expanded,
+        tableCount: layout.tables.length,
+        onPath,
+        dimmed,
+        onToggle:
+          layout.canExplore && toggleSystem
+            ? () => toggleSystem(layout.system.id)
+            : undefined,
+      },
+      draggable: false,
+      selectable: false,
+    });
+
+    sizedTopLevel.push({
+      id: layout.system.id,
+      width: layout.width,
+      height: layout.height,
+    });
+  }
+
+  for (const dependency of data.dependencies) {
+    const highlighted = highlight?.boundarySystemIds.has(dependency.systemId) ?? false;
+    const dimmed = traceActive && !highlighted;
+
+    nodes.push({
+      id: dependencyNodeId(dependency.systemId),
+      type: "dependency",
+      position: { x: 0, y: 0 },
+      style: {
+        width: DEPENDENCY_WIDTH,
+        height: DEPENDENCY_HEIGHT,
+        opacity: dimmed ? 0.35 : 1,
+      },
+      data: {
+        label: dependency.systemName,
+        systemName: dependency.systemName,
+        message: dependency.message,
+        highlighted,
+        dimmed,
+      },
+      draggable: false,
+      selectable: false,
+    });
+
+    sizedTopLevel.push({
+      id: dependencyNodeId(dependency.systemId),
+      width: DEPENDENCY_WIDTH,
+      height: DEPENDENCY_HEIGHT,
+    });
+  }
+
+  const topLevelNodeId = (systemId: string): string | null => {
     if (data.systems.some((system) => system.id === systemId)) return systemId;
     if (data.dependencies.some((item) => item.systemId === systemId)) {
       return dependencyNodeId(systemId);
@@ -302,72 +549,279 @@ export function buildSystemGraph(
     return null;
   };
 
-  for (const system of data.systems) {
-    nodes.push({
-      id: system.id,
-      type: "system",
-      position: { x: 0, y: 0 },
-      data: {
-        label: system.label,
-        description: system.description,
-        target: system.target ?? false,
-        canExplore: data.tables.some((table) => table.systemId === system.id),
-        selected: highlighted.has(system.id),
-        connectionStatus: system.connectionStatus,
-        metadataStatus: system.metadataStatus,
-      },
-    });
-  }
+  const layoutEdges: Array<{ source: string; target: string }> = [];
+  const seenLayoutEdges = new Set<string>();
 
-  for (const dependency of data.dependencies) {
-    nodes.push({
-      id: dependencyNodeId(dependency.systemId),
-      type: "dependency",
-      position: { x: 0, y: 0 },
-      data: {
-        label: dependency.systemName,
-        systemName: dependency.systemName,
-        message: dependency.message,
-      },
-    });
-  }
-
-  // Deduplicate system connections even if several column edges connect the
-  // same pair of systems.
-  for (const item of data.lineageEdges) {
-    const source = nodeIdForSystem(item.source.systemId);
-    const target = nodeIdForSystem(item.target.systemId);
+  for (const edge of data.lineageEdges) {
+    const source = topLevelNodeId(edge.source.systemId);
+    const target = topLevelNodeId(edge.target.systemId);
 
     if (!source || !target || source === target) continue;
 
-    const id = `${source}->${target}`;
-    if (!connections.has(id)) {
-      connections.set(id, {
-        id,
-        source,
-        target,
-        markerStart: { type: MarkerType.ArrowClosed },
-      });
-    }
+    const key = `${source}->${target}`;
+    if (seenLayoutEdges.has(key)) continue;
+    seenLayoutEdges.add(key);
+    layoutEdges.push({ source, target });
   }
 
-  const edges = Array.from(connections.values());
-  for (const edge of edges) {
-    layoutEdges.push({ source: edge.source, target: edge.target });
-  }
-
-  const positions = computeDagreLayout(
-    nodes.map((node) => ({
-      id: node.id,
-      width: node.type === "dependency" ? 240 : 220,
-      height: node.type === "dependency" ? 96 : 78,
-    })),
-    layoutEdges
-  );
+  const positions = computeDagreLayout(sizedTopLevel, layoutEdges, {
+    rankdir: "LR",
+    nodesep: 70,
+    ranksep: 150,
+  });
 
   for (const node of nodes) {
     node.position = positions[node.id] ?? { x: 0, y: 0 };
   }
 
-  return { nodes, edges };
+  const tableNodes: TableFlowNode[] = [];
+  const attributeNodes: AttributeFlowNode[] = [];
+  const toggleTable = handlers?.onToggleTable;
+
+  for (const layout of systemLayouts) {
+    if (!layout.expanded) continue;
+
+    let tableY = SYSTEM_HEADER + SYSTEM_PADDING;
+
+    for (const tableLayout of layout.tables) {
+      const { table, expanded, height } = tableLayout;
+      const flowNodeId = tableFlowNodeId(layout.system.id, table.id);
+      const onPath = highlight?.highlightedTableIds.has(table.id) ?? false;
+      const dimmed = traceActive && !onPath;
+
+      tableNodes.push({
+        id: flowNodeId,
+        type: "table",
+        parentId: layout.system.id,
+        extent: "parent",
+        position: { x: SYSTEM_PADDING, y: tableY },
+        style: {
+          width: TABLE_WIDTH,
+          height,
+          opacity: dimmed ? 0.35 : 1,
+        },
+        data: {
+          label: table.name,
+          systemId: layout.system.id,
+          tableId: table.id,
+          attributeCount: table.attributes.length,
+          expanded,
+          onPath,
+          dimmed,
+          onToggle: toggleTable ? () => toggleTable(table.id) : undefined,
+        },
+        draggable: false,
+        selectable: false,
+      });
+
+      if (expanded) {
+        table.attributes.forEach((attribute, index) => {
+          const nodeId = attributeFlowNodeId(
+            layout.system.id,
+            table.id,
+            attribute.id
+          );
+          const attributeOnPath = highlight?.attributeNodeIds.has(nodeId) ?? false;
+          const attributeDimmed = traceActive && !attributeOnPath;
+
+          attributeNodes.push({
+            id: nodeId,
+            type: "attribute",
+            parentId: flowNodeId,
+            extent: "parent",
+            position: {
+              x: TABLE_PADDING,
+              y: TABLE_HEADER + TABLE_PADDING + index * (ATTR_HEIGHT + ATTR_GAP),
+            },
+            style: {
+              width: ATTR_WIDTH,
+              height: ATTR_HEIGHT,
+              opacity: attributeDimmed ? 0.35 : 1,
+            },
+            data: {
+              label: attribute.name,
+              dataType: attribute.dataType,
+              transformation: attribute.transformation,
+              status: attribute.status,
+              systemId: layout.system.id,
+              tableId: table.id,
+              attributeId: attribute.id,
+              highlighted: attributeOnPath,
+              isTraceTarget: highlight?.targetNodeId === nodeId,
+              dimmed: attributeDimmed,
+            },
+            draggable: false,
+          });
+        });
+      }
+
+      tableY += height + TABLE_GAP;
+    }
+  }
+
+  const layoutBySystem = new Map(
+    systemLayouts.map((layout) => [layout.system.id, layout])
+  );
+  const tableById = new Map(data.tables.map((table) => [table.id, table]));
+
+  const endpointNode = (endpoint: LineageEndpoint): EndpointNode | null => {
+    const resolution = resolveEndpoint(endpoint, data);
+
+    if (resolution.kind === "unresolved") return null;
+
+    if (resolution.kind === "dependency") {
+      return {
+        nodeId: dependencyNodeId(endpoint.systemId),
+        level: "dependency",
+        tableId: null,
+      };
+    }
+
+    if (resolution.kind === "metadata_unavailable") {
+      return {
+        nodeId: endpoint.systemId,
+        level: "system",
+        tableId: null,
+      };
+    }
+
+    const layout = layoutBySystem.get(endpoint.systemId);
+    if (!layout) return null;
+
+    if (!layout.expanded) {
+      return {
+        nodeId: endpoint.systemId,
+        level: "system",
+        tableId: null,
+      };
+    }
+
+    const table = endpoint.tableId ? tableById.get(endpoint.tableId) : undefined;
+
+    if (!table || table.systemId !== endpoint.systemId) {
+      return {
+        nodeId: endpoint.systemId,
+        level: "system",
+        tableId: null,
+      };
+    }
+
+    const flowTableId = tableFlowNodeId(endpoint.systemId, table.id);
+    const tableLayout = layout.tables.find((item) => item.table.id === table.id);
+
+    if (!tableLayout?.expanded || !endpoint.attributeId) {
+      return {
+        nodeId: flowTableId,
+        level: "table",
+        tableId: table.id,
+      };
+    }
+
+    const attribute = table.attributes.find(
+      (item) => item.id === endpoint.attributeId
+    );
+
+    if (!attribute) {
+      return {
+        nodeId: flowTableId,
+        level: "table",
+        tableId: table.id,
+      };
+    }
+
+    return {
+      nodeId: attributeFlowNodeId(
+        endpoint.systemId,
+        table.id,
+        attribute.id
+      ),
+      level: "attribute",
+      tableId: table.id,
+    };
+  };
+
+  const groups = new Map<string, EdgeGroup>();
+
+  for (const item of data.lineageEdges) {
+    const source = endpointNode(item.source);
+    const target = endpointNode(item.target);
+
+    if (!source || !target || source.nodeId === target.nodeId) continue;
+
+    const sameTable =
+      source.level === "attribute" &&
+      target.level === "attribute" &&
+      source.tableId != null &&
+      source.tableId === target.tableId;
+    const sourceHandle = source.level === "attribute" ? "attr-out" : undefined;
+    const targetHandle =
+      target.level === "attribute"
+        ? sameTable
+          ? "attr-right-in"
+          : "attr-in"
+        : undefined;
+    const key = `${source.nodeId}|${sourceHandle ?? ""}|${target.nodeId}|${
+      targetHandle ?? ""
+    }`;
+
+    const existing = groups.get(key);
+    if (existing) existing.edges.push(item);
+    else {
+      groups.set(key, {
+        source,
+        target,
+        sourceHandle,
+        targetHandle,
+        edges: [item],
+        sameTable,
+      });
+    }
+  }
+
+  const edges: Edge[] = [];
+
+  for (const [key, group] of groups) {
+    const onPath = group.edges.some(
+      (edge) => highlight?.edgeIds.has(edge.id) ?? false
+    );
+    const dimmed = traceActive && !onPath;
+    const stroke = onPath ? "#2563eb" : "#64748b";
+
+    edges.push({
+      id: group.edges.length === 1 ? group.edges[0].id : `summary:${key}`,
+      source: group.source.nodeId,
+      sourceHandle: group.sourceHandle,
+      target: group.target.nodeId,
+      targetHandle: group.targetHandle,
+      type: group.sameTable ? "lineage" : undefined,
+      data: {
+        edges: group.edges,
+        sameTable: group.sameTable,
+        summary: group.edges.length > 1,
+      },
+      markerStart: {
+        type: MarkerType.ArrowClosed,
+        width: 14,
+        height: 14,
+        color: stroke,
+      },
+      style: {
+        stroke,
+        strokeWidth: onPath ? 3 : 1.7,
+        opacity: dimmed ? 0.15 : 1,
+      },
+      zIndex: onPath ? 10 : 1,
+    });
+  }
+
+  const contentHeight = sizedTopLevel.reduce((max, sized) => {
+    const position = positions[sized.id] ?? { y: 0 };
+    return Math.max(max, position.y + sized.height);
+  }, 0);
+
+  return {
+    nodes: [...nodes, ...tableNodes, ...attributeNodes],
+    edges,
+    contentHeight,
+  };
 }
