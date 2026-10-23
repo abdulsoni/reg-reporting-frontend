@@ -73,6 +73,42 @@ export type ConnectResponse = {
   message: string;
 };
 
+/** One system included in the all-connected lineage snapshot. */
+export type ConnectedLineageSystem = {
+  system: string;
+  sourceObject: string;
+  rowCount: number;
+  resolved: boolean;
+};
+
+/** One discovered column in the all-connected lineage snapshot. */
+export type ConnectedLineageRow = {
+  system: string;
+  attribute_name: string;
+  table_name: string;
+  transformation: string;
+  sourced_from: string;
+  consumed_by: string;
+  status: string;
+};
+
+/**
+ * GET /lineage/connected — either the complete lineage snapshot once every
+ * source system has been connected, or a 409 body reporting which systems are
+ * still missing.
+ */
+export type ConnectedLineageResponse = {
+  allSystemsConnected: boolean;
+  detail?: string;
+  missingSystems?: string[];
+  lineageGraphUrl?: string;
+  systemsConnected?: number;
+  systemsOfRecordReached?: number;
+  branchOutstanding?: number;
+  systems?: ConnectedLineageSystem[];
+  rows?: ConnectedLineageRow[];
+};
+
 export type DatapointRef = {
   report_code: string | null;
   row_code: string;

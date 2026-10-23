@@ -2,12 +2,17 @@
 
 import { CheckCircle2, Clock, Loader2, AlertTriangle } from "lucide-react";
 import Link from "next/link";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useLineage } from "../context/LineageContext";
+import { useConnectedLineage } from "../hooks/useConnectedLineage";
 import { TraceError } from "./NextSourceCard";
 import { SourceSystemPanel } from "./SourceSystemPanel";
-import type { HopStatus, LineageHop } from "../types/lineage";
+import type {
+  ConnectedLineageRow,
+  HopStatus,
+  LineageHop,
+} from "../types/lineage";
 
 const COLUMNS = [
   "Hop",
@@ -66,6 +71,37 @@ function StatusCell({ status }: { status: HopStatus }) {
   );
 }
 
+function normalizeHopStatus(status: string): HopStatus {
+  const normalized = status.trim().toUpperCase().replace(/[\s-]+/g, "_");
+
+  if (
+    normalized === "SOURCE_REACHED" ||
+    normalized === "LOOP_DETECTED" ||
+    normalized === "METADATA_NOT_FOUND" ||
+    normalized === "AMBIGUOUS_METADATA"
+  ) {
+    return normalized;
+  }
+
+  return "IDENTIFIED";
+}
+
+function connectedRowToHop(
+  row: ConnectedLineageRow,
+  index: number
+): LineageHop {
+  return {
+    hop: index + 1,
+    system: row.system,
+    attribute_name: row.attribute_name,
+    table_name: row.table_name,
+    transformation: row.transformation,
+    source_from: row.sourced_from,
+    consumed_by: row.consumed_by,
+    status: normalizeHopStatus(row.status),
+  };
+}
+
 function HopRow({ hop }: { hop: LineageHop }) {
   return (
     <tr className="border-b border-slate-100 last:border-0 hover:bg-slate-50/60">
@@ -117,6 +153,21 @@ export function TraceProgressPanel() {
     error,
     resetTrace,
   } = useLineage();
+
+  const {
+    data: connectedLineage,
+    loading: connectedLoading,
+    error: connectedError,
+  } = useConnectedLineage();
+
+  const connectedSnapshot =
+    connectedLineage?.allSystemsConnected ? connectedLineage : null;
+  const connectedActive = connectedSnapshot !== null;
+
+  const connectedHops = useMemo(
+    () => (connectedLineage?.rows ?? []).map(connectedRowToHop),
+    [connectedLineage]
+  );
 
   /*
    * Every connection appends its newly discovered hops as a separate
@@ -181,7 +232,37 @@ export function TraceProgressPanel() {
     }
   }, [sections.length]);
 
-  if (!traceId) {
+  if (!traceId && !connectedActive) {
+    if (connectedLoading) {
+      return (
+        <section className="panel flex items-center justify-center gap-2 p-8 text-[11px] text-slate-500">
+          <Loader2 size={15} className="animate-spin" />
+          Checking connection status…
+        </section>
+      );
+    }
+
+    if (connectedError) {
+      return (
+        <section className="panel p-8 text-center">
+          <h2 className="text-sm font-bold text-ink">
+            Connection check failed
+          </h2>
+
+          <p className="mx-auto mt-2 max-w-md text-[11px] leading-5 text-slate-500">
+            {connectedError}
+          </p>
+
+          <Link
+            href="/lineage"
+            className="btn-primary mt-4 inline-flex"
+          >
+            Go to data point selection
+          </Link>
+        </section>
+      );
+    }
+
     return (
       <section className="panel p-8 text-center">
         <h2 className="text-sm font-bold text-ink">No trace in progress</h2>
@@ -201,16 +282,30 @@ export function TraceProgressPanel() {
     );
   }
 
-  const proven = hops.filter((hop) => hop.status === "IDENTIFIED").length;
-  const sourceReached = hops.filter(
+  const displayHops = connectedActive ? connectedHops : hops;
+  const proven = displayHops.filter(
+    (hop) => hop.status === "IDENTIFIED"
+  ).length;
+  const sourceReached = displayHops.filter(
     (hop) => hop.status === "SOURCE_REACHED"
   ).length;
+  const isFullyConnected = isComplete || connectedActive;
+  const systemCount = connectedSnapshot
+    ? (connectedSnapshot.systemsConnected ?? 0)
+    : connectedSystems.length;
+  const sourcesFound = connectedSnapshot
+    ? (connectedSnapshot.systemsOfRecordReached ?? 0)
+    : sourceReached;
 
   /*
    * Before the first hop arrives there is still nothing to section, so a
    * single empty placeholder keeps the table + connect card layout visible.
    */
-  const renderedSections = sections.length > 0 ? sections : [[]];
+  const renderedSections = connectedActive
+    ? [connectedHops]
+    : sections.length > 0
+      ? sections
+      : [[]];
 
   return (
     <div className="flex flex-col gap-4">
@@ -223,15 +318,15 @@ export function TraceProgressPanel() {
             </h2>
 
             <p className="mt-1 font-mono text-[10px] text-slate-500">
-              {traceId}
+              {traceId ?? (connectedActive ? "All source systems connected" : null)}
             </p>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <Stat label="Hops" value={String(hops.length)} />
+            <Stat label="Hops" value={String(displayHops.length)} />
             <Stat label="Proven" value={String(proven)} />
-            <Stat label="Systems" value={String(connectedSystems.length)} />
-            <Stat label="Sources found" value={String(sourceReached)} />
+            <Stat label="Systems" value={String(systemCount)} />
+            <Stat label="Sources found" value={String(sourcesFound)} />
           </div>
         </div>
 
@@ -243,7 +338,7 @@ export function TraceProgressPanel() {
             <CheckCircle2
               size={13}
               className={
-                isComplete
+                isFullyConnected
                   ? "text-emerald-600"
                   : isLoop
                     ? "text-red-600"
@@ -253,7 +348,9 @@ export function TraceProgressPanel() {
           )}
 
           <span className="text-[11px] font-semibold text-slate-700">
-            {statusLabel(phase, busy, needsConnection)}
+            {connectedActive
+              ? "All systems connected — displaying the complete lineage."
+              : statusLabel(phase, busy, needsConnection)}
           </span>
         </div>
       </section>
@@ -275,9 +372,11 @@ export function TraceProgressPanel() {
               <section className="panel overflow-hidden p-0">
                 <div className="border-b border-slate-200 px-5 py-3.5">
                   <h3 className="text-xs font-bold text-ink">
-                    {sectionIndex === 0
-                      ? "Discovered hops"
-                      : `Lineage section ${sectionIndex + 1}`}
+                    {connectedActive
+                      ? "Connected lineage"
+                      : sectionIndex === 0
+                        ? "Discovered hops"
+                        : `Lineage section ${sectionIndex + 1}`}
                   </h3>
                 </div>
 
@@ -333,19 +432,72 @@ export function TraceProgressPanel() {
               </section>
 
               {/* Next source */}
-              <div className="panel flex flex-col p-5">
-                <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                  Next source identification
-                </h2>
+              {connectedSnapshot ? (
+                <div className="panel flex flex-col p-5">
+                  <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    All systems connected
+                  </h2>
 
-                <SourceSystemPanel mode="connect" hideTitle />
-              </div>
+                  <p className="text-[11px] leading-5 text-slate-500">
+                    The complete lineage snapshot is available for every source
+                    system.
+                  </p>
+
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Stat
+                      label="Connected"
+                      value={String(connectedSnapshot.systemsConnected ?? 0)}
+                    />
+                    <Stat
+                      label="Sources reached"
+                      value={String(
+                        connectedSnapshot.systemsOfRecordReached ?? 0
+                      )}
+                    />
+                    <Stat
+                      label="Branches outstanding"
+                      value={String(connectedSnapshot.branchOutstanding ?? 0)}
+                    />
+                    <Stat
+                      label="Missing"
+                      value={String(
+                        connectedSnapshot.missingSystems?.length ?? 0
+                      )}
+                    />
+                  </div>
+
+                  <ul className="mt-4 space-y-1.5">
+                    {(connectedSnapshot.systems ?? []).map((system) => (
+                      <li
+                        key={system.system}
+                        className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-2.5 py-1.5 font-mono text-[10px]"
+                      >
+                        <span className="min-w-0 truncate text-slate-700">
+                          {system.system}
+                        </span>
+
+                        <span className="shrink-0 text-slate-400">
+                          {system.rowCount} {system.rowCount === 1 ? "row" : "rows"}
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : (
+                <div className="panel flex flex-col p-5">
+                  <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                    Next source identification
+                  </h2>
+
+                  <SourceSystemPanel mode="connect" hideTitle />
+                </div>
+              )}
             </div>
           );
         })}
 
         {/* Loading new hop */}
-        {busy && !isComplete && (
+        {busy && !isFullyConnected && (
           <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-slate-500">
             <Loader2 size={15} className="animate-spin" />
             Continuing reverse lineage...
@@ -355,7 +507,7 @@ export function TraceProgressPanel() {
 
       {/* Footer actions */}
       <div className="flex items-center justify-between gap-3">
-        {isComplete ? (
+        {isFullyConnected ? (
           <Link
             href="/lineage/evidence"
             className="btn-primary inline-flex"
