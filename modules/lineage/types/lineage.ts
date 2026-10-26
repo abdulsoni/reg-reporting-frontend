@@ -92,6 +92,29 @@ export type ConnectedLineageRow = {
   status: string;
 };
 
+/** The next upstream object the walk would need after a connected system. */
+export type ConnectedLineageNextSource = {
+  system: string | null;
+  object_name: string | null;
+  connection_required: boolean;
+};
+
+/** One connected system in a partial or complete lineage snapshot. */
+export type ConnectedLineageSystemDetail = {
+  system: string;
+  database: string;
+  connectionStatus: string;
+  metadataStatus: string;
+  resolved: boolean;
+  report_name: string;
+  source_object: string;
+  systems_connected: number;
+  systems_of_record_reached: number;
+  branch_outstanding: number;
+  rows: ConnectedLineageRow[];
+  next_source?: ConnectedLineageNextSource;
+};
+
 /**
  * GET /lineage/connected — either the complete lineage snapshot once every
  * source system has been connected, or a 409 body reporting which systems are
@@ -106,6 +129,7 @@ export type ConnectedLineageResponse = {
   systemsOfRecordReached?: number;
   branchOutstanding?: number;
   systems?: ConnectedLineageSystem[];
+  connectedSystems?: ConnectedLineageSystemDetail[];
   rows?: ConnectedLineageRow[];
 };
 

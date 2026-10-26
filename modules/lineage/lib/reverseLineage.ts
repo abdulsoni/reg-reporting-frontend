@@ -66,6 +66,39 @@ export function buildAttributeSearchIndex(
   return index;
 }
 
+/** Build the search entry for a concrete, resolved lineage endpoint. */
+export function buildAttributeSearchEntry(
+  data: LineageData,
+  endpoint: LineageEndpoint
+): AttributeSearchEntry | null {
+  if (!endpoint.tableId || !endpoint.attributeId) return null;
+
+  const table = data.tables.find(
+    (item) =>
+      item.id === endpoint.tableId && item.systemId === endpoint.systemId
+  );
+  const attribute = table?.attributes.find(
+    (item) => item.id === endpoint.attributeId
+  );
+
+  if (!table || !attribute) return null;
+
+  const systemLabel =
+    data.systems.find((system) => system.id === table.systemId)?.label ??
+    table.systemId;
+
+  return {
+    key: endpointKey(endpoint),
+    systemId: table.systemId,
+    systemLabel,
+    tableId: table.id,
+    tableName: table.name,
+    attributeId: attribute.id,
+    attributeName: attribute.name,
+    dataType: attribute.dataType,
+  };
+}
+
 /** Case-insensitive substring search across system, table and column names. */
 export function searchAttributes(
   index: AttributeSearchEntry[],

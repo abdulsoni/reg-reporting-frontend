@@ -162,11 +162,44 @@ export function TraceProgressPanel() {
 
   const connectedSnapshot =
     connectedLineage?.allSystemsConnected ? connectedLineage : null;
-  const connectedActive = connectedSnapshot !== null;
+
+  /*
+   * One table per connected system, using the per-system rows from
+   * `connectedSystems`. This is available even while some systems are still
+   * missing, so partial lineage is shown before the trace is complete.
+   */
+  const connectedSections = useMemo(() => {
+    const details = connectedLineage?.connectedSystems ?? [];
+
+    if (details.length > 0) {
+      return details.map((detail, sectionIndex) => ({
+        key: `${detail.system}-${sectionIndex}`,
+        title: detail.system,
+        subtitle: detail.database,
+        hops: (detail.rows ?? []).map(connectedRowToHop),
+      }));
+    }
+
+    /* Older responses only expose the flattened rows. */
+    if (connectedLineage?.allSystemsConnected) {
+      return [
+        {
+          key: "connected",
+          title: "Connected lineage",
+          subtitle: undefined,
+          hops: (connectedLineage.rows ?? []).map(connectedRowToHop),
+        },
+      ];
+    }
+
+    return null;
+  }, [connectedLineage]);
+
+  const connectedActive = connectedSections !== null;
 
   const connectedHops = useMemo(
-    () => (connectedLineage?.rows ?? []).map(connectedRowToHop),
-    [connectedLineage]
+    () => (connectedSections ?? []).flatMap((section) => section.hops),
+    [connectedSections]
   );
 
   /*
@@ -289,23 +322,19 @@ export function TraceProgressPanel() {
   const sourceReached = displayHops.filter(
     (hop) => hop.status === "SOURCE_REACHED"
   ).length;
-  const isFullyConnected = isComplete || connectedActive;
-  const systemCount = connectedSnapshot
-    ? (connectedSnapshot.systemsConnected ?? 0)
+  const isFullyConnected = isComplete || connectedSnapshot !== null;
+  const systemCount = connectedLineage
+    ? (connectedLineage.systemsConnected ?? connectedSections?.length ?? 0)
     : connectedSystems.length;
-  const sourcesFound = connectedSnapshot
-    ? (connectedSnapshot.systemsOfRecordReached ?? 0)
+  const sourcesFound = connectedLineage
+    ? (connectedLineage.systemsOfRecordReached ?? sourceReached)
     : sourceReached;
 
   /*
    * Before the first hop arrives there is still nothing to section, so a
    * single empty placeholder keeps the table + connect card layout visible.
    */
-  const renderedSections = connectedActive
-    ? [connectedHops]
-    : sections.length > 0
-      ? sections
-      : [[]];
+  const renderedSections = sections.length > 0 ? sections : [[]];
 
   return (
     <div className="flex flex-col gap-4">
@@ -318,7 +347,14 @@ export function TraceProgressPanel() {
             </h2>
 
             <p className="mt-1 font-mono text-[10px] text-slate-500">
-              {traceId ?? (connectedActive ? "All source systems connected" : null)}
+              {traceId ??
+                (connectedSnapshot
+                  ? "All source systems connected"
+                  : connectedActive
+                    ? `${systemCount} ${
+                        systemCount === 1 ? "system" : "systems"
+                      } connected`
+                    : null)}
             </p>
           </div>
 
@@ -348,9 +384,13 @@ export function TraceProgressPanel() {
           )}
 
           <span className="text-[11px] font-semibold text-slate-700">
-            {connectedActive
+            {connectedSnapshot
               ? "All systems connected — displaying the complete lineage."
-              : statusLabel(phase, busy, needsConnection)}
+              : connectedActive
+                ? `${systemCount} ${
+                    systemCount === 1 ? "system" : "systems"
+                  } connected — connect the remaining systems to complete the lineage.`
+                : statusLabel(phase, busy, needsConnection)}
           </span>
         </div>
       </section>
@@ -358,132 +398,107 @@ export function TraceProgressPanel() {
       <TraceError error={error} />
 
       {/* Lineage sections */}
-      <div className="space-y-5">
-        {renderedSections.map((sectionHops, sectionIndex) => {
-          const isLastSection = sectionIndex === renderedSections.length - 1;
+      {connectedActive && connectedSections ? (
+        <div
+          ref={bottomRef}
+          className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]"
+        >
+          <div className="space-y-5">
+            {connectedSections.map((section) => (
+              <LineageTable
+                key={section.key}
+                title={section.title}
+                subtitle={section.subtitle}
+                hops={section.hops}
+                busy={busy}
+              />
+            ))}
+          </div>
 
-          return (
-            <div
-              key={`section-${sectionIndex}`}
-              ref={isLastSection ? bottomRef : undefined}
-              className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]"
-            >
-              {/* Hops table */}
-              <section className="panel overflow-hidden p-0">
-                <div className="border-b border-slate-200 px-5 py-3.5">
-                  <h3 className="text-xs font-bold text-ink">
-                    {connectedActive
-                      ? "Connected lineage"
-                      : sectionIndex === 0
-                        ? "Discovered hops"
-                        : `Lineage section ${sectionIndex + 1}`}
-                  </h3>
-                </div>
+          {/* Next source */}
+          {connectedSnapshot ? (
+            <div className="panel flex flex-col p-5">
+              <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                All systems connected
+              </h2>
 
-                <div className="overflow-x-auto">
-                  <table className="w-full min-w-[1100px] border-collapse text-[11px]">
-                    <thead>
-                      <tr className="border-b border-slate-200 bg-slate-50">
-                        {COLUMNS.map((column) => (
-                          <th
-                            key={column}
-                            className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500"
-                          >
-                            {column}
-                          </th>
-                        ))}
-                      </tr>
-                    </thead>
+              <p className="text-[11px] leading-5 text-slate-500">
+                The complete lineage snapshot is available for every source
+                system.
+              </p>
 
-                    <tbody>
-                      {sectionHops.length === 0 ? (
-                        <tr>
-                          <td
-                            colSpan={COLUMN_COUNT}
-                            className="px-3 py-10 text-center text-[11px] text-slate-500"
-                          >
-                            {busy
-                              ? "Exploring metadata…"
-                              : "No hops discovered yet."}
-                          </td>
-                        </tr>
-                      ) : (
-                        sectionHops.map((hop) => (
-                          <HopRow
-                            key={`${sectionIndex}-${hop.hop}`}
-                            hop={hop}
-                          />
-                        ))
-                      )}
-                    </tbody>
-                  </table>
-                </div>
+              <div className="mt-3 grid grid-cols-2 gap-2">
+                <Stat
+                  label="Connected"
+                  value={String(connectedSnapshot.systemsConnected ?? 0)}
+                />
+                <Stat
+                  label="Sources reached"
+                  value={String(
+                    connectedSnapshot.systemsOfRecordReached ?? 0
+                  )}
+                />
+                <Stat
+                  label="Branches outstanding"
+                  value={String(connectedSnapshot.branchOutstanding ?? 0)}
+                />
+                <Stat
+                  label="Missing"
+                  value={String(
+                    connectedSnapshot.missingSystems?.length ?? 0
+                  )}
+                />
+              </div>
 
-                {/* Footer */}
-                <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
-                  <p className="text-[10px] text-slate-500">
-                    {sectionHops.length
-                      ? `${sectionHops.length} lineage ${
-                          sectionHops.length === 1 ? "record" : "records"
-                        } identified.`
-                      : "No lineage records identified."}
-                  </p>
-                </div>
-              </section>
+              <ul className="mt-4 space-y-1.5">
+                {(connectedSnapshot.systems ?? []).map((system) => (
+                  <li
+                    key={system.system}
+                    className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-2.5 py-1.5 font-mono text-[10px]"
+                  >
+                    <span className="min-w-0 truncate text-slate-700">
+                      {system.system}
+                    </span>
 
-              {/* Next source */}
-              {connectedSnapshot ? (
-                <div className="panel flex flex-col p-5">
-                  <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                    All systems connected
-                  </h2>
+                    <span className="shrink-0 text-slate-400">
+                      {system.rowCount} {system.rowCount === 1 ? "row" : "rows"}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <div className="panel flex flex-col p-5">
+              <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+                Next source identification
+              </h2>
 
-                  <p className="text-[11px] leading-5 text-slate-500">
-                    The complete lineage snapshot is available for every source
-                    system.
-                  </p>
+              <SourceSystemPanel mode="connect" hideTitle />
+            </div>
+          )}
+        </div>
+      ) : (
+        <div className="space-y-5">
+          {renderedSections.map((sectionHops, sectionIndex) => {
+            const isLastSection = sectionIndex === renderedSections.length - 1;
 
-                  <div className="mt-3 grid grid-cols-2 gap-2">
-                    <Stat
-                      label="Connected"
-                      value={String(connectedSnapshot.systemsConnected ?? 0)}
-                    />
-                    <Stat
-                      label="Sources reached"
-                      value={String(
-                        connectedSnapshot.systemsOfRecordReached ?? 0
-                      )}
-                    />
-                    <Stat
-                      label="Branches outstanding"
-                      value={String(connectedSnapshot.branchOutstanding ?? 0)}
-                    />
-                    <Stat
-                      label="Missing"
-                      value={String(
-                        connectedSnapshot.missingSystems?.length ?? 0
-                      )}
-                    />
-                  </div>
+            return (
+              <div
+                key={`section-${sectionIndex}`}
+                ref={isLastSection ? bottomRef : undefined}
+                className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]"
+              >
+                <LineageTable
+                  title={
+                    sectionIndex === 0
+                      ? "Discovered hops"
+                      : `Lineage section ${sectionIndex + 1}`
+                  }
+                  hops={sectionHops}
+                  busy={busy}
+                />
 
-                  <ul className="mt-4 space-y-1.5">
-                    {(connectedSnapshot.systems ?? []).map((system) => (
-                      <li
-                        key={system.system}
-                        className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-2.5 py-1.5 font-mono text-[10px]"
-                      >
-                        <span className="min-w-0 truncate text-slate-700">
-                          {system.system}
-                        </span>
-
-                        <span className="shrink-0 text-slate-400">
-                          {system.rowCount} {system.rowCount === 1 ? "row" : "rows"}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : (
+                {/* Next source */}
                 <div className="panel flex flex-col p-5">
                   <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
                     Next source identification
@@ -491,19 +506,19 @@ export function TraceProgressPanel() {
 
                   <SourceSystemPanel mode="connect" hideTitle />
                 </div>
-              )}
-            </div>
-          );
-        })}
+              </div>
+            );
+          })}
+        </div>
+      )}
 
-        {/* Loading new hop */}
-        {busy && !isFullyConnected && (
-          <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-slate-500">
-            <Loader2 size={15} className="animate-spin" />
-            Continuing reverse lineage...
-          </div>
-        )}
-      </div>
+      {/* Loading new hop */}
+      {busy && !isFullyConnected && (
+        <div className="flex items-center justify-center gap-2 py-6 text-[11px] text-slate-500">
+          <Loader2 size={15} className="animate-spin" />
+          Continuing reverse lineage...
+        </div>
+      )}
 
       {/* Footer actions */}
       <div className="flex items-center justify-between gap-3">
@@ -529,6 +544,77 @@ export function TraceProgressPanel() {
         </button>
       </div>
     </div>
+  );
+}
+
+function LineageTable({
+  title,
+  subtitle,
+  hops,
+  busy,
+}: {
+  title: string;
+  subtitle?: string;
+  hops: LineageHop[];
+  busy: boolean;
+}) {
+  return (
+    <section className="panel overflow-hidden p-0">
+      <div className="border-b border-slate-200 px-5 py-3.5">
+        <h3 className="flex items-baseline gap-2 text-xs font-bold text-ink">
+          {title}
+
+          {subtitle && (
+            <span className="font-mono text-[10px] font-normal text-slate-400">
+              {subtitle}
+            </span>
+          )}
+        </h3>
+      </div>
+
+      <div className="overflow-x-auto">
+        <table className="w-full min-w-[1100px] border-collapse text-[11px]">
+          <thead>
+            <tr className="border-b border-slate-200 bg-slate-50">
+              {COLUMNS.map((column) => (
+                <th
+                  key={column}
+                  className="px-3 py-2.5 text-left text-[9px] font-bold uppercase tracking-wider text-slate-500"
+                >
+                  {column}
+                </th>
+              ))}
+            </tr>
+          </thead>
+
+          <tbody>
+            {hops.length === 0 ? (
+              <tr>
+                <td
+                  colSpan={COLUMN_COUNT}
+                  className="px-3 py-10 text-center text-[11px] text-slate-500"
+                >
+                  {busy ? "Exploring metadata…" : "No hops discovered yet."}
+                </td>
+              </tr>
+            ) : (
+              hops.map((hop) => <HopRow key={hop.hop} hop={hop} />)
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer */}
+      <div className="border-t border-slate-100 px-4 py-3 sm:px-5">
+        <p className="text-[10px] text-slate-500">
+          {hops.length
+            ? `${hops.length} lineage ${
+                hops.length === 1 ? "record" : "records"
+              } identified.`
+            : "No lineage records identified."}
+        </p>
+      </div>
+    </section>
   );
 }
 

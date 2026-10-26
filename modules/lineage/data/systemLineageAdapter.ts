@@ -388,6 +388,7 @@ type SystemLayout = {
 type EndpointNode = {
   nodeId: string;
   level: "attribute" | "table" | "system" | "dependency";
+  systemId: string;
   tableId: string | null;
 };
 
@@ -398,6 +399,7 @@ type EdgeGroup = {
   targetHandle?: string;
   edges: LineageEdge[];
   sameTable: boolean;
+  rightSide: boolean;
 };
 
 function tableHeight(attributeCount: number, expanded: boolean): number {
@@ -673,6 +675,7 @@ export function buildSystemGraph(
       return {
         nodeId: dependencyNodeId(endpoint.systemId),
         level: "dependency",
+        systemId: endpoint.systemId,
         tableId: null,
       };
     }
@@ -681,6 +684,7 @@ export function buildSystemGraph(
       return {
         nodeId: endpoint.systemId,
         level: "system",
+        systemId: endpoint.systemId,
         tableId: null,
       };
     }
@@ -692,6 +696,7 @@ export function buildSystemGraph(
       return {
         nodeId: endpoint.systemId,
         level: "system",
+        systemId: endpoint.systemId,
         tableId: null,
       };
     }
@@ -702,6 +707,7 @@ export function buildSystemGraph(
       return {
         nodeId: endpoint.systemId,
         level: "system",
+        systemId: endpoint.systemId,
         tableId: null,
       };
     }
@@ -713,6 +719,7 @@ export function buildSystemGraph(
       return {
         nodeId: flowTableId,
         level: "table",
+        systemId: endpoint.systemId,
         tableId: table.id,
       };
     }
@@ -725,6 +732,7 @@ export function buildSystemGraph(
       return {
         nodeId: flowTableId,
         level: "table",
+        systemId: endpoint.systemId,
         tableId: table.id,
       };
     }
@@ -736,6 +744,7 @@ export function buildSystemGraph(
         attribute.id
       ),
       level: "attribute",
+      systemId: endpoint.systemId,
       tableId: table.id,
     };
   };
@@ -753,13 +762,19 @@ export function buildSystemGraph(
       target.level === "attribute" &&
       source.tableId != null &&
       source.tableId === target.tableId;
+    const rightSide =
+      source.systemId === target.systemId &&
+      (source.level === "attribute" || source.level === "table") &&
+      (target.level === "attribute" || target.level === "table");
     const sourceHandle = source.level === "attribute" ? "attr-out" : undefined;
     const targetHandle =
       target.level === "attribute"
-        ? sameTable
+        ? rightSide
           ? "attr-right-in"
           : "attr-in"
-        : undefined;
+        : target.level === "table" && rightSide
+          ? "table-right-in"
+          : undefined;
     const key = `${source.nodeId}|${sourceHandle ?? ""}|${target.nodeId}|${
       targetHandle ?? ""
     }`;
@@ -774,6 +789,7 @@ export function buildSystemGraph(
         targetHandle,
         edges: [item],
         sameTable,
+        rightSide,
       });
     }
   }
@@ -793,10 +809,11 @@ export function buildSystemGraph(
       sourceHandle: group.sourceHandle,
       target: group.target.nodeId,
       targetHandle: group.targetHandle,
-      type: group.sameTable ? "lineage" : undefined,
+      type: group.rightSide ? "lineage" : undefined,
       data: {
         edges: group.edges,
         sameTable: group.sameTable,
+        rightSide: group.rightSide,
         summary: group.edges.length > 1,
       },
       markerStart: {

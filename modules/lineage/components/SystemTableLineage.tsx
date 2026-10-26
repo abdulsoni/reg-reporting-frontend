@@ -11,6 +11,7 @@ import {
   type ScenarioId,
 } from "../data/scenarios";
 import {
+  buildAttributeSearchEntry,
   collectUpstreamTrace,
   type AttributeSearchEntry,
   type UpstreamTrace,
@@ -19,6 +20,7 @@ import {
   deriveTraceExpansion,
   traceUsesTable,
 } from "../lib/systemGraphHighlight";
+import type { LineageEndpoint } from "../types/lineage";
 
 const SCENARIO_LABELS: Record<ScenarioId, string> = {
   A: "normalized_data only",
@@ -87,13 +89,9 @@ export default function SystemTableLineage() {
     [activeTrace, expandedTables]
   );
 
-  const handleSearchSelect = useCallback(
-    (entry: AttributeSearchEntry) => {
-      const trace = collectUpstreamTrace(data, {
-        systemId: entry.systemId,
-        tableId: entry.tableId,
-        attributeId: entry.attributeId,
-      });
+  const activateTrace = useCallback(
+    (target: LineageEndpoint, entry: AttributeSearchEntry) => {
+      const trace = collectUpstreamTrace(data, target);
       const expansion = deriveTraceExpansion(trace, data);
 
       setActiveTrace({ entry, trace });
@@ -111,6 +109,29 @@ export default function SystemTableLineage() {
       });
     },
     [data]
+  );
+
+  const handleSearchSelect = useCallback(
+    (entry: AttributeSearchEntry) => {
+      activateTrace(
+        {
+          systemId: entry.systemId,
+          tableId: entry.tableId,
+          attributeId: entry.attributeId,
+        },
+        entry
+      );
+    },
+    [activateTrace]
+  );
+
+  const handleAttributeTrace = useCallback(
+    (target: LineageEndpoint) => {
+      const entry = buildAttributeSearchEntry(data, target);
+      if (!entry) return;
+      activateTrace(target, entry);
+    },
+    [activateTrace, data]
   );
 
   const clearSearchTrace = useCallback(() => {
@@ -200,6 +221,7 @@ export default function SystemTableLineage() {
           highlight={activeTrace?.trace ?? null}
           onToggleSystem={toggleSystem}
           onToggleTable={toggleTable}
+          onTraceAttribute={handleAttributeTrace}
           onClearHighlight={clearSearchTrace}
         />
       </section>

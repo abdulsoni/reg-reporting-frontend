@@ -183,6 +183,14 @@ function TableNode({ data }: NodeProps<TableFlowNode>) {
         style={{ top: 22 }}
         className="!h-[7px] !w-[7px] !border-2 !border-slate-500 !bg-white"
       />
+
+      <Handle
+        id="table-right-in"
+        type="target"
+        position={Position.Right}
+        style={{ top: 22 }}
+        className="!h-[7px] !w-[7px] !border-2 !border-slate-500 !bg-white"
+      />
     </div>
   );
 }
@@ -292,7 +300,11 @@ function ExpandedLineageEdge(props: EdgeProps) {
 
   let path: string;
 
-  if ((data as { sameTable?: boolean } | undefined)?.sameTable) {
+  const edgeData = data as
+    | { rightSide?: boolean; sameTable?: boolean }
+    | undefined;
+
+  if (edgeData?.rightSide || edgeData?.sameTable) {
     const laneX = Math.max(sourceX, targetX) + 36;
     path = `M ${sourceX},${sourceY} L ${laneX},${sourceY} L ${laneX},${targetY} L ${targetX},${targetY}`;
   } else {
@@ -409,6 +421,7 @@ type SelectedAttribute = {
 type FlowEdgeData = {
   edges?: LineageEdge[];
   sameTable?: boolean;
+  rightSide?: boolean;
   summary?: boolean;
 };
 
@@ -419,6 +432,7 @@ export default function SystemLineageGraph({
   highlight,
   onToggleSystem,
   onToggleTable,
+  onTraceAttribute,
   onClearHighlight,
 }: {
   data: LineageData;
@@ -427,6 +441,7 @@ export default function SystemLineageGraph({
   highlight?: UpstreamTrace | null;
   onToggleSystem: (systemId: string) => void;
   onToggleTable: (tableId: string) => void;
+  onTraceAttribute?: (target: LineageEndpoint) => void;
   onClearHighlight?: () => void;
 }) {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
@@ -535,18 +550,31 @@ export default function SystemLineageGraph({
     });
   }, [graph.edges, selectedEdgeId]);
 
-  const handleNodeClick = useCallback((_: React.MouseEvent, node: Node) => {
-    if (node.type !== "attribute") return;
+  const handleNodeClick = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (node.type !== "attribute") return;
 
-    const data = node.data as AttributeData;
+      const nodeData = node.data as AttributeData;
+      setSelectedEdgeId(null);
 
-    setSelectedAttribute({
-      systemId: data.systemId,
-      tableId: data.tableId,
-      attributeId: data.attributeId,
-    });
-    setSelectedEdgeId(null);
-  }, []);
+      if (onTraceAttribute) {
+        setSelectedAttribute(null);
+        onTraceAttribute({
+          systemId: nodeData.systemId,
+          tableId: nodeData.tableId,
+          attributeId: nodeData.attributeId,
+        });
+        return;
+      }
+
+      setSelectedAttribute({
+        systemId: nodeData.systemId,
+        tableId: nodeData.tableId,
+        attributeId: nodeData.attributeId,
+      });
+    },
+    [onTraceAttribute]
+  );
 
   const selectedEdgeDetails = useMemo(() => {
     if (!selectedEdgeId) return null;
