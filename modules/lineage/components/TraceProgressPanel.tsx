@@ -229,6 +229,12 @@ export function TraceProgressPanel() {
   const bottomRef = useRef<HTMLDivElement | null>(null);
 
   /*
+   * Track how many sections were displayed on the previous render so we
+   * only scroll when a new table section is appended.
+   */
+  const previousSectionCountRef = useRef(0);
+
+  /*
    * Slice the hop list into sections. The context replaces the whole list
    * on every refresh, so whatever arrived since the last assignment becomes
    * the next section. Derived while rendering (React's previous-state
@@ -252,18 +258,37 @@ export function TraceProgressPanel() {
   }
 
   /*
-   * Scroll to the newly added section.
+   * Use the connected snapshot when every system is connected, or while no
+   * trace is active yet. Once a trace is running, the trace sections are the
+   * live source of truth and must be used so newly connected sections appear.
+   */
+  const useConnectedDisplay =
+    connectedSnapshot !== null || (connectedActive && !traceId);
+
+  const traceSectionCount = sections.length > 0 ? sections.length : 1;
+
+  const displayedSectionCount = useConnectedDisplay
+    ? (connectedSections?.length ?? 0)
+    : traceSectionCount;
+
+  /*
+   * Scroll to the latest section when a new table section is appended.
    *
-   * Do not scroll on the initial section.
+   * Skip the initial render.
    */
   useEffect(() => {
-    if (sections.length > 1) {
+    if (
+      previousSectionCountRef.current > 0 &&
+      displayedSectionCount > previousSectionCountRef.current
+    ) {
       bottomRef.current?.scrollIntoView({
         behavior: "smooth",
         block: "start",
       });
     }
-  }, [sections.length]);
+
+    previousSectionCountRef.current = displayedSectionCount;
+  }, [displayedSectionCount]);
 
   if (!traceId && !connectedActive) {
     if (connectedLoading) {
@@ -315,7 +340,7 @@ export function TraceProgressPanel() {
     );
   }
 
-  const displayHops = connectedActive ? connectedHops : hops;
+  const displayHops = useConnectedDisplay ? connectedHops : hops;
   const proven = displayHops.filter(
     (hop) => hop.status === "IDENTIFIED"
   ).length;
@@ -335,6 +360,24 @@ export function TraceProgressPanel() {
    * single empty placeholder keeps the table + connect card layout visible.
    */
   const renderedSections = sections.length > 0 ? sections : [[]];
+
+  /*
+   * Connected sections are shown while a full snapshot exists or before a
+   * trace starts. Once the trace is running, render the trace sections so a
+   * newly connected source appends a new table + next-source panel.
+   */
+  const sectionCards =
+    useConnectedDisplay && connectedSections
+      ? connectedSections
+      : renderedSections.map((sectionHops, sectionIndex) => ({
+          key: `section-${sectionIndex}`,
+          title:
+            sectionIndex === 0
+              ? "Discovered hops"
+              : `Lineage section ${sectionIndex + 1}`,
+          subtitle: undefined,
+          hops: sectionHops,
+        }));
 
   return (
     <div className="flex flex-col gap-4">
@@ -398,7 +441,7 @@ export function TraceProgressPanel() {
       <TraceError error={error} />
 
       {/* Lineage sections */}
-      {connectedActive && connectedSections ? (
+      {connectedSnapshot && connectedSections ? (
         <div
           ref={bottomRef}
           className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]"
@@ -415,86 +458,73 @@ export function TraceProgressPanel() {
             ))}
           </div>
 
-          {/* Next source */}
-          {connectedSnapshot ? (
-            <div className="panel flex flex-col p-5">
-              <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                All systems connected
-              </h2>
+          <div className="panel flex flex-col p-5">
+            <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
+              All systems connected
+            </h2>
 
-              <p className="text-[11px] leading-5 text-slate-500">
-                The complete lineage snapshot is available for every source
-                system.
-              </p>
+            <p className="text-[11px] leading-5 text-slate-500">
+              The complete lineage snapshot is available for every source
+              system.
+            </p>
 
-              <div className="mt-3 grid grid-cols-2 gap-2">
-                <Stat
-                  label="Connected"
-                  value={String(connectedSnapshot.systemsConnected ?? 0)}
-                />
-                <Stat
-                  label="Sources reached"
-                  value={String(
-                    connectedSnapshot.systemsOfRecordReached ?? 0
-                  )}
-                />
-                <Stat
-                  label="Branches outstanding"
-                  value={String(connectedSnapshot.branchOutstanding ?? 0)}
-                />
-                <Stat
-                  label="Missing"
-                  value={String(
-                    connectedSnapshot.missingSystems?.length ?? 0
-                  )}
-                />
-              </div>
-
-              <ul className="mt-4 space-y-1.5">
-                {(connectedSnapshot.systems ?? []).map((system) => (
-                  <li
-                    key={system.system}
-                    className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-2.5 py-1.5 font-mono text-[10px]"
-                  >
-                    <span className="min-w-0 truncate text-slate-700">
-                      {system.system}
-                    </span>
-
-                    <span className="shrink-0 text-slate-400">
-                      {system.rowCount} {system.rowCount === 1 ? "row" : "rows"}
-                    </span>
-                  </li>
-                ))}
-              </ul>
+            <div className="mt-3 grid grid-cols-2 gap-2">
+              <Stat
+                label="Connected"
+                value={String(connectedSnapshot.systemsConnected ?? 0)}
+              />
+              <Stat
+                label="Sources reached"
+                value={String(
+                  connectedSnapshot.systemsOfRecordReached ?? 0
+                )}
+              />
+              <Stat
+                label="Branches outstanding"
+                value={String(connectedSnapshot.branchOutstanding ?? 0)}
+              />
+              <Stat
+                label="Missing"
+                value={String(
+                  connectedSnapshot.missingSystems?.length ?? 0
+                )}
+              />
             </div>
-          ) : (
-            <div className="panel flex flex-col p-5">
-              <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-                Next source identification
-              </h2>
 
-              <SourceSystemPanel mode="connect" hideTitle />
-            </div>
-          )}
+            <ul className="mt-4 space-y-1.5">
+              {(connectedSnapshot.systems ?? []).map((system) => (
+                <li
+                  key={system.system}
+                  className="flex items-center justify-between gap-3 rounded-md border border-slate-200 px-2.5 py-1.5 font-mono text-[10px]"
+                >
+                  <span className="min-w-0 truncate text-slate-700">
+                    {system.system}
+                  </span>
+
+                  <span className="shrink-0 text-slate-400">
+                    {system.rowCount} {system.rowCount === 1 ? "row" : "rows"}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </div>
         </div>
       ) : (
         <div className="space-y-5">
-          {renderedSections.map((sectionHops, sectionIndex) => {
-            const isLastSection = sectionIndex === renderedSections.length - 1;
+          {sectionCards.map((section, sectionIndex) => {
+            const isLastSection =
+              sectionIndex === sectionCards.length - 1;
 
             return (
               <div
-                key={`section-${sectionIndex}`}
+                key={section.key}
                 ref={isLastSection ? bottomRef : undefined}
                 className="grid grid-cols-1 gap-5 xl:grid-cols-[minmax(0,1fr)_340px]"
               >
                 <LineageTable
-                  title={
-                    sectionIndex === 0
-                      ? "Discovered hops"
-                      : `Lineage section ${sectionIndex + 1}`
-                  }
-                  hops={sectionHops}
+                  title={section.title}
+                  subtitle={section.subtitle}
+                  hops={section.hops}
                   busy={busy}
                 />
 
