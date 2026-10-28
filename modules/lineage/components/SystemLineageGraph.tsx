@@ -361,6 +361,21 @@ function DetailPanel({ title, onClose, children }: DetailPanelProps) {
   );
 }
 
+function SideDetailPanel({ title, onClose, children }: DetailPanelProps) {
+  return (
+    <aside className="flex h-full w-[420px] shrink-0 flex-col overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+      <div className="flex items-center justify-between border-b border-slate-200 px-4 py-3">
+        <h3 className="font-semibold text-ink">{title}</h3>
+        <button type="button" onClick={onClose} className="rounded px-2 py-1 text-slate-500 hover:bg-slate-100" aria-label="Close details">x</button>
+      </div>
+      <div className="flex-1 overflow-y-auto px-4 py-3">
+        <div className="space-y-3 text-sm">{children}</div>
+      </div>
+    </aside>
+  );
+}
+
+
 function formatEndpoint(
   endpoint: LineageEndpoint,
   data: LineageData,
@@ -726,46 +741,52 @@ export default function SystemLineageGraph({
     Math.min(1200, graph.contentHeight + 48)
   );
 
+  const hasDetails = Boolean(selectedEdgeDetails || selectedAttributeDetails || highlight);
+
   return (
     <div
-      className="relative w-full overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7]"
+      className="flex w-full gap-3 overflow-hidden rounded-lg"
       style={{ height: containerHeight }}
     >
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        edgeTypes={edgeTypes}
-        onInit={setFlow}
-        onNodeClick={handleNodeClick}
-        onEdgeClick={(_, edge) => {
-          setSelectedEdgeId(edge.id);
-          setSelectedAttribute(null);
-        }}
-        onPaneClick={() => {
-          setSelectedEdgeId(null);
-          setSelectedAttribute(null);
-          if (highlight) onClearHighlight?.();
-        }}
-        fitView
-        fitViewOptions={{ padding: 0.12, minZoom: 0.2, maxZoom: 1.1 }}
-        minZoom={0.2}
-        maxZoom={1.5}
-        nodesDraggable={false}
-        nodesConnectable={false}
-        elementsSelectable
-        proOptions={{ hideAttribution: true }}
-        className="bg-[#fbfaf7]"
-      >
-        <Background color="#e5e2da" gap={22} size={1} />
-        <Controls showInteractive={false} position="bottom-left" />
-      </ReactFlow>
-
-      {selectedEdgeDetails ? (
-        <DetailPanel
-          title="Transformation details"
-          onClose={() => setSelectedEdgeId(null)}
+      <div className="relative flex-1 overflow-hidden rounded-lg border border-slate-200 bg-[#fbfaf7]">
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
+          onInit={setFlow}
+          onNodeClick={handleNodeClick}
+          onEdgeClick={(_, edge) => {
+            setSelectedEdgeId(edge.id);
+            setSelectedAttribute(null);
+          }}
+          onPaneClick={() => {
+            setSelectedEdgeId(null);
+            setSelectedAttribute(null);
+            if (highlight) onClearHighlight?.();
+          }}
+          fitView
+          fitViewOptions={{ padding: 0.12, minZoom: 0.2, maxZoom: 1.1 }}
+          minZoom={0.2}
+          maxZoom={1.5}
+          nodesDraggable={false}
+          nodesConnectable={false}
+          elementsSelectable
+          proOptions={{ hideAttribution: true }}
+          className="bg-[#fbfaf7]"
         >
+          <Background color="#e5e2da" gap={22} size={1} />
+          <Controls showInteractive={false} position="bottom-left" />
+        </ReactFlow>
+      </div>
+
+      {hasDetails ? (
+        <>
+          {selectedEdgeDetails ? (
+            <SideDetailPanel
+              title="Transformation details"
+              onClose={() => setSelectedEdgeId(null)}
+            >
           {selectedEdgeDetails.count > 1 && (
             <p className="rounded-md bg-slate-50 px-2 py-1.5 text-[11px] text-slate-500">
               {selectedEdgeDetails.count} column relationships are collapsed
@@ -835,12 +856,12 @@ export default function SystemLineageGraph({
                 </ul>
               </div>
             )}
-        </DetailPanel>
-      ) : selectedAttributeDetails ? (
-        <DetailPanel
-          title="Column details"
-          onClose={() => setSelectedAttribute(null)}
-        >
+            </SideDetailPanel>
+          ) : selectedAttributeDetails ? (
+            <SideDetailPanel
+              title="Column details"
+              onClose={() => setSelectedAttribute(null)}
+            >
           <div className="flex items-center justify-between gap-3">
             <div className="font-mono font-medium text-ink">
               {selectedAttributeDetails.table.name}.
@@ -925,12 +946,12 @@ export default function SystemLineageGraph({
               </p>
             )}
           </div>
-        </DetailPanel>
-      ) : highlight ? (
-        <DetailPanel
-          title="Lineage path"
-          onClose={() => onClearHighlight?.()}
-        >
+            </SideDetailPanel>
+          ) : highlight ? (
+            <SideDetailPanel
+              title="Lineage path"
+              onClose={() => onClearHighlight?.()}
+            >
           {highlight.incomplete && (
             <div className="rounded-md border border-amber-300 bg-amber-50 p-2.5 text-[11px] leading-snug text-amber-800">
               <span className="font-semibold">Path incomplete.</span> Upstream
@@ -1029,7 +1050,9 @@ export default function SystemLineageGraph({
             {highlight.edgeIds.size}{" "}
             {highlight.edgeIds.size === 1 ? "edge" : "edges"}.
           </p>
-        </DetailPanel>
+            </SideDetailPanel>
+          ) : null}
+        </>
       ) : null}
     </div>
   );
