@@ -1,70 +1,73 @@
 "use client";
-
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LineageRecord, SelectedDatapoint } from "../components/data-lineage/types";
+import { LineageRow } from "../components/data-lineage/types";
+import DataLineageHeader from "../components/data-lineage/DataLineageHeader";
 import SelectedDatapointCard from "../components/data-lineage/SelectedDatapointCard";
 import LineageDetailsTable from "../components/data-lineage/LineageDetailsTable";
 import NextSourceIdentification from "../components/data-lineage/NextSourceIdentification";
 import ValueReconciliation from "../components/data-lineage/ValueReconciliation";
-import DataLineageHeader from "../components/data-lineage/DataLineageHeader";
+import { ArrowLeft } from "lucide-react";
 
-const initialDatapoint: SelectedDatapoint = {
-  reportName: "COREP C90 Regulatory Report",
-  entity: "J P Morgan Bank",
-  reportingDate: "30 Jun 2026",
-  attribute: "on_balance",
-  row: "0040",
-  column: "0200",
-  value: "600.00",
-  unit: "EUR m",
-  page: "4",
-  section: "Capital adequacy",
-  reportFile: "COREP_C90_Report_Test.pdf",
-};
-
-const initialRecords: LineageRecord[] = [
+// Demo data matches the screenshot's layout. Replace with your API response before production use.
+const initialRows: LineageRow[] = [
   {
     hop: "1",
     system: "NORMALIZED_DATA.DB",
-    attribute: "on_balance",
+    systemLabel: "Reporting Layer",
     table: "normalized_metrics",
-    transformation: "SUM(exposure_amount) + adjustment_amount",
-    sourcedFrom: "FX_DATA.DB, AUDIT.DB, SENSI.DB",
-    consumedBy: "PDF Report",
+    attribute: "on_balance",
+    recordKey: "—",
+    inputValue: "580.00 + 20.00",
+    transformation: "SUM(exposure_amount) +\nadjustment_amount",
+    valuesUsed: "580.00\n+ 20.00",
+    outputValue: "600.00 EUR m",
+    consumedBy: "PDF Report\n(COREP C90)",
     status: "Verified",
     connected: true,
   },
   {
     hop: "2a",
     system: "FX_DATA.DB",
-    attribute: "fx_rate",
+    systemLabel: "FX Rates",
     table: "fx_rates",
+    attribute: "fx_rate",
+    recordKey: "TRD-00981",
+    inputValue: "0.9123",
     transformation: "COALESCE(fx_rate, 1)",
-    sourcedFrom: "FX rates source / trade_id = TRD-00981",
-    consumedBy: "NORMALIZED_DATA.DB",
+    valuesUsed: "0.9123",
+    outputValue: "0.9123",
+    consumedBy: "normalized_metrics",
     status: "Verified",
     connected: true,
   },
   {
     hop: "2b",
     system: "AUDIT.DB",
-    attribute: "adjustment_amount",
+    systemLabel: "Adjustments",
     table: "adjustments",
+    attribute: "adjustment_amount",
+    recordKey: "TRD-00981",
+    inputValue: "20.00",
     transformation: "SUM(adjustment_amount)",
-    sourcedFrom: "trade_id = TRD-00981",
-    consumedBy: "NORMALIZED_DATA.DB",
+    valuesUsed: "20.00",
+    outputValue: "20.00",
+    consumedBy: "normalized_metrics",
     status: "Verified",
     connected: true,
   },
   {
     hop: "2c",
     system: "SENSI.DB",
-    attribute: "exposure_amount",
+    systemLabel: "Exposure",
     table: "trade_details",
+    attribute: "exposure_amount",
+    recordKey: "TRD-00981",
+    inputValue: "580.00",
     transformation: "SUM(exposure_amount)",
-    sourcedFrom: "trade_id = TRD-00981",
-    consumedBy: "NORMALIZED_DATA.DB",
+    valuesUsed: "580.00",
+    outputValue: "580.00",
+    consumedBy: "normalized_metrics",
     status: "Discovering",
     connected: false,
   },
@@ -72,100 +75,98 @@ const initialRecords: LineageRecord[] = [
 
 export default function DataLineagePage() {
   const router = useRouter();
-  const [records, setRecords] = useState<LineageRecord[]>(initialRecords);
-  const [selectedHop, setSelectedHop] = useState<string | null>("2c");
-  const [notice, setNotice] = useState<string | null>(null);
-
-  const selectedRecord = useMemo(
-    () => records.find((record) => record.hop === selectedHop),
-    [records, selectedHop]
-  );
-  const nextSource = records.find((record) => !record.connected);
-
-  const handleIdentifySource = (system: string) => {
-    // Demo interaction: replace with your source-identification modal/API call.
-    setNotice(`Source identification started for ${system}. Connect this action to your datasource discovery API.`);
-  };
-
-  const handleExport = () => {
-    const headers = ["Hop", "System", "Attribute", "Table", "Transformation", "Sourced from", "Consumed by", "Status"];
-    const rows = records.map((r) => [r.hop, r.system, r.attribute, r.table, r.transformation, r.sourcedFrom, r.consumedBy, r.status]);
-    const csv = [headers, ...rows]
-      .map((row) => row.map((cell) => `"${String(cell).replaceAll('"', '""')}"`).join(","))
+  const [rows] = useState(initialRows);
+  const [notice, setNotice] = useState("");
+  const disconnected = rows.find((r) => !r.connected);
+  const exportCsv = () => {
+    const headers = [
+      "Hop",
+      "System",
+      "Table",
+      "Attribute",
+      "Record / Join Key",
+      "Input Value(s)",
+      "Transformation",
+      "Values Used",
+      "Output Value",
+      "Consumed By",
+      "Status",
+    ];
+    const values = rows.map((r) => [
+      r.hop,
+      r.system,
+      r.table,
+      r.attribute,
+      r.recordKey,
+      r.inputValue,
+      r.transformation,
+      r.valuesUsed,
+      r.outputValue,
+      r.consumedBy,
+      r.status,
+    ]);
+    const csv = [headers, ...values]
+      .map((row) =>
+        row.map((v) => `"${String(v).replaceAll('"', '""')}"`).join(","),
+      )
       .join("\r\n");
-    const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
-    const url = URL.createObjectURL(blob);
-    const anchor = document.createElement("a");
-    anchor.href = url;
-    anchor.download = "data-lineage.csv";
-    anchor.click();
-    URL.revokeObjectURL(url);
+    const link = document.createElement("a");
+    link.href = URL.createObjectURL(
+      new Blob([csv], { type: "text/csv;charset=utf-8;" }),
+    );
+    link.download = "data-lineage.csv";
+    link.click();
+    URL.revokeObjectURL(link.href);
   };
-
   return (
     <main className="min-h-screen bg-[#f4f8fd] text-slate-800">
-      <DataLineageHeader
-        onUploadPdf={() => router.push("/reports/upload")}
-        onSelectDatasource={() => router.push("/datasources")}
-      />
-
-      <div className="mx-auto max-w-[1800px] space-y-4 px-4 py-5 sm:px-6 lg:px-7">
+      <DataLineageHeader />
+      <div className="mx-auto max-w-[1900px] space-y-3 px-4 py-4 sm:px-6 lg:px-7">
         <div className="flex items-center gap-3">
           <button
             onClick={() => router.back()}
-            className="rounded-lg p-2 text-blue-800 transition hover:bg-blue-100"
-            aria-label="Go back"
+            aria-label="Back"
+            className="rounded-lg p-1.5 text-[#123866] hover:bg-blue-100"
           >
-            <span className="text-xl leading-none">←</span>
+            <ArrowLeft size={19} />
           </button>
           <div>
-            <h1 className="text-xl font-bold tracking-tight text-[#123866] sm:text-2xl">Data Lineage Details</h1>
-            <p className="mt-1 text-sm text-slate-500">Trace a specific value to its source records.</p>
+            <h1 className="text-xl font-bold tracking-tight text-[#102d55]">
+              Data Lineage Details
+            </h1>
+            <p className="mt-0.5 text-xs text-slate-500">
+              Trace a specific value to its source records
+            </p>
           </div>
         </div>
-
-        <SelectedDatapointCard
-          datapoint={initialDatapoint}
-          onBack={() => router.push("/data-lineage/select-datapoint")}
-          onViewGraph={() => router.push("/lineage-graph")}
-          onExport={handleExport}
-        />
-
+        <SelectedDatapointCard onExport={exportCsv} />
+        <LineageDetailsTable rows={rows}>
+          {disconnected && (
+            <NextSourceIdentification
+              row={disconnected}
+              onIdentify={(system) =>
+                setNotice(
+                  `Source identification requested for ${system}. Connect this button to your datasource discovery API.`,
+                )
+              }
+            />
+          )}
+        </LineageDetailsTable>
         {notice && (
-          <div role="status" className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800">
-            <span>{notice}</span>
-            <button onClick={() => setNotice(null)} className="font-semibold underline">Dismiss</button>
+          <div
+            role="status"
+            className="flex items-center justify-between rounded-lg border border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-800"
+          >
+            {notice}
+            <button
+              onClick={() => setNotice("")}
+              className="font-semibold underline"
+            >
+              Dismiss
+            </button>
           </div>
         )}
-
-        <LineageDetailsTable
-          records={records}
-          selectedHop={selectedHop}
-          onSelectHop={setSelectedHop}
-        />
-
-        {selectedRecord && (
-          <div className="rounded-lg border border-slate-200 bg-white px-4 py-3 text-xs text-slate-600 shadow-sm">
-            <span className="font-semibold text-slate-800">Selected hop {selectedRecord.hop}:</span>{" "}
-            {selectedRecord.system} · {selectedRecord.table}.{selectedRecord.attribute} · Transformation:{" "}
-            <span className="font-mono">{selectedRecord.transformation}</span>
-          </div>
-        )}
-
-        <NextSourceIdentification
-          record={nextSource}
-          onIdentify={handleIdentifySource}
-        />
-
-        <ValueReconciliation
-          sourceContributions={[
-            { label: "Exposure contribution (SENSI)", value: 580 },
-            { label: "Audit adjustments", value: 20 },
-          ]}
-          calculatedValue={600}
-          reportedValue={Number(initialDatapoint.value)}
-          unit={initialDatapoint.unit}
-        />
+        <ValueReconciliation />
       </div>
     </main>
   );

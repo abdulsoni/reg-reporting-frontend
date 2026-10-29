@@ -1,64 +1,25 @@
+import Link from "next/link";
 import { FileText, ArrowLeft, ChartNoAxesCombined, Download } from "lucide-react";
-import type { SelectedDatapoint } from "./types";
 
-type Props = {
-  datapoint: SelectedDatapoint;
-  onBack: () => void;
-  onViewGraph: () => void;
-  onExport: () => void;
-};
+const details = [
+  ["Attribute", "on_balance"], ["Row", "0040"], ["Column", "0200"], ["Value", "600.00"],
+  ["Unit", "EUR m"], ["Page", "4"], ["Section", "Capital adequacy"],
+];
 
-function Detail({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="min-w-0 border-l border-blue-100 pl-3">
-      <div className="mb-1 text-[11px] font-medium text-slate-500">{label}</div>
-      <div className="truncate text-xs font-semibold text-slate-800" title={value}>{value}</div>
+export default function SelectedDatapointCard({ onExport }: { onExport: () => void }) {
+  return <section className="rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
+    <div className="flex flex-col gap-3 xl:flex-row xl:items-center">
+      <div className="flex min-w-[220px] items-center gap-3 xl:border-r xl:border-blue-100 xl:pr-3">
+        <div className="flex h-10 w-9 shrink-0 items-center justify-center rounded-md bg-red-500 text-white"><FileText size={22} /></div>
+        <div><h2 className="text-xs font-bold text-slate-900">COREP C90 Regulatory Report</h2><p className="mt-1 text-xs text-slate-600">J P Morgan Bank</p></div>
+      </div>
+      <div className="xl:min-w-[105px] xl:border-r xl:border-blue-100 xl:pr-3"><p className="text-[10px] text-slate-500">Reporting date</p><p className="mt-1 text-xs font-semibold text-slate-800">30 Jun 2026</p></div>
+      <div className="min-w-0 flex-1"><p className="mb-1.5 text-xs font-bold text-slate-800">Selected datapoint</p><div className="grid grid-cols-2 gap-x-3 gap-y-2 sm:grid-cols-4 xl:grid-cols-7">{details.map(([label, value]) => <div key={label} className="min-w-0 border-l border-blue-100 pl-2"><p className="text-[10px] text-slate-500">{label}</p><p className="mt-1 truncate text-[11px] font-semibold text-slate-900" title={value}>{value}</p></div>)}</div></div>
+      <div className="flex flex-wrap gap-2 xl:shrink-0">
+        <Link href="/lineage" className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-2.5 py-2 text-[10px] font-semibold text-blue-700 hover:bg-blue-50"><ArrowLeft size={13}/>Back to select datapoint</Link>
+        <Link href="/lineage/explorer" className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-2.5 py-2 text-[10px] font-semibold text-blue-700 hover:bg-blue-50"><ChartNoAxesCombined size={13}/>View lineage graph</Link>
+        <button onClick={onExport} className="inline-flex items-center gap-1.5 rounded-lg border border-blue-200 px-2.5 py-2 text-[10px] font-semibold text-blue-700 hover:bg-blue-50"><Download size={13}/>Export lineage</button>
+      </div>
     </div>
-  );
-}
-
-export default function SelectedDatapointCard({ datapoint, onBack, onViewGraph, onExport }: Props) {
-  return (
-    <section className="rounded-xl border border-blue-100 bg-white p-4 shadow-sm">
-      <div className="flex flex-col gap-4 xl:flex-row xl:items-center">
-        <div className="flex min-w-[245px] items-center gap-3 xl:w-[270px]">
-          <div className="flex h-10 w-9 shrink-0 items-center justify-center rounded-md bg-red-50 text-red-600">
-            <FileText size={22} />
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-sm font-bold text-slate-900">{datapoint.reportName}</div>
-            <div className="mt-1 text-xs text-slate-500">{datapoint.entity}</div>
-            <div className="mt-1 truncate text-[11px] text-slate-400">{datapoint.reportFile}</div>
-          </div>
-        </div>
-
-        <div className="xl:w-[130px]">
-          <div className="mb-1 text-[11px] text-slate-500">Reporting date</div>
-          <div className="text-xs font-semibold text-slate-800">{datapoint.reportingDate}</div>
-        </div>
-
-        <div className="grid flex-1 grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-4 xl:grid-cols-7">
-          <Detail label="Attribute" value={datapoint.attribute} />
-          <Detail label="Row" value={datapoint.row} />
-          <Detail label="Column" value={datapoint.column} />
-          <Detail label="Value" value={datapoint.value} />
-          <Detail label="Unit" value={datapoint.unit} />
-          <Detail label="Page" value={datapoint.page} />
-          <Detail label="Section" value={datapoint.section} />
-        </div>
-      </div>
-
-      <div className="mt-4 flex flex-wrap justify-end gap-2 border-t border-slate-100 pt-3">
-        <button onClick={onBack} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50">
-          <ArrowLeft size={14} /> Back to select datapoint
-        </button>
-        <button onClick={onViewGraph} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50">
-          <ChartNoAxesCombined size={14} /> View lineage graph
-        </button>
-        <button onClick={onExport} className="inline-flex items-center gap-2 rounded-lg border border-blue-200 px-3 py-2 text-xs font-semibold text-blue-700 transition hover:bg-blue-50">
-          <Download size={14} /> Export lineage
-        </button>
-      </div>
-    </section>
-  );
+  </section>;
 }

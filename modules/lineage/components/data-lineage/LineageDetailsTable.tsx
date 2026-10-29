@@ -1,80 +1,26 @@
+"use client";
 import { Database, CheckCircle2, Clock3, CircleAlert } from "lucide-react";
-import type { LineageRecord } from "./types";
+import type { ReactNode } from "react";
+import type { LineageRow } from "./types";
 
-type Props = {
-  records: LineageRecord[];
-  selectedHop: string | null;
-  onSelectHop: (hop: string) => void;
-};
-
-function StatusBadge({ status }: { status: LineageRecord["status"] }) {
-  const styles = {
-    Verified: "border-emerald-100 bg-emerald-50 text-emerald-700",
-    Discovering: "border-amber-100 bg-amber-50 text-amber-700",
-    Unresolved: "border-rose-100 bg-rose-50 text-rose-700",
-  };
-  const Icon = status === "Verified" ? CheckCircle2 : status === "Discovering" ? Clock3 : CircleAlert;
-  return (
-    <span className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-2.5 py-1 text-[11px] font-semibold ${styles[status]}`}>
-      <Icon size={13} /> {status}
-    </span>
-  );
+function Status({ value }: { value: LineageRow["status"] }) {
+  const style = value === "Verified" ? "bg-emerald-50 text-emerald-700 border-emerald-100" : value === "Discovering" ? "bg-blue-50 text-blue-700 border-blue-200" : "bg-rose-50 text-rose-700 border-rose-100";
+  const Icon = value === "Verified" ? CheckCircle2 : value === "Discovering" ? Clock3 : CircleAlert;
+  return <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[10px] font-semibold ${style}`}><Icon size={13}/>{value}</span>;
 }
 
-export default function LineageDetailsTable({ records, selectedHop, onSelectHop }: Props) {
-  return (
-    <section className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-sm">
-      <div className="border-b border-blue-100 px-4 py-3">
-        <h2 className="text-sm font-bold text-slate-900">Data Lineage Details</h2>
-        <p className="mt-1 text-xs text-slate-500">Reverse trace from the selected PDF datapoint to its contributing source records.</p>
-      </div>
-
-      <div className="overflow-x-auto">
-        <table className="w-full min-w-[1180px] border-collapse text-left">
-          <thead>
-            <tr className="bg-blue-50/70 text-[11px] uppercase tracking-wide text-slate-600">
-              {["Hop", "System", "Attribute", "Table", "Transformation", "Sourced from", "Consumed by", "Status"].map((heading) => (
-                <th key={heading} className="border-b border-r border-blue-100 px-3 py-3 font-semibold last:border-r-0">{heading}</th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {records.map((record) => {
-              const active = selectedHop === record.hop;
-              return (
-                <tr
-                  key={record.hop}
-                  onClick={() => onSelectHop(record.hop)}
-                  className={`cursor-pointer text-xs transition hover:bg-blue-50/50 ${active ? "bg-blue-50" : "bg-white"}`}
-                >
-                  <td className="border-b border-r border-blue-100 px-3 py-4 font-semibold text-slate-800">{record.hop}</td>
-                  <td className="border-b border-r border-blue-100 px-3 py-4">
-                    <div className="flex items-start gap-2">
-                      <Database size={18} className="mt-0.5 shrink-0 text-blue-600" />
-                      <div>
-                        <div className="font-semibold text-slate-800">{record.system}</div>
-                        <span className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${record.connected ? "bg-emerald-50 text-emerald-700" : "bg-amber-50 text-amber-700"}`}>
-                          {record.connected ? "Connected" : "Not connected"}
-                        </span>
-                      </div>
-                    </div>
-                  </td>
-                  <td className="border-b border-r border-blue-100 px-3 py-4 font-medium text-slate-700">{record.attribute}</td>
-                  <td className="border-b border-r border-blue-100 px-3 py-4 text-slate-700">{record.table}</td>
-                  <td className="max-w-[270px] border-b border-r border-blue-100 px-3 py-4 font-mono text-[11px] leading-5 text-slate-700">{record.transformation}</td>
-                  <td className="max-w-[210px] border-b border-r border-blue-100 px-3 py-4 text-slate-600">{record.sourcedFrom}</td>
-                  <td className="max-w-[170px] border-b border-r border-blue-100 px-3 py-4 text-slate-600">{record.consumedBy}</td>
-                  <td className="border-b border-blue-100 px-3 py-4"><StatusBadge status={record.status} /></td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-      <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 px-4 py-3 text-xs text-slate-500">
-        <span>{records.length} lineage records identified</span>
-        <span>Select a row to inspect its source details below.</span>
-      </div>
-    </section>
-  );
+export default function LineageDetailsTable({ rows, children }: { rows: LineageRow[]; children?: ReactNode }) {
+  return <section className="overflow-hidden rounded-xl border border-blue-100 bg-white shadow-sm">
+    <div className="flex items-center gap-3 px-3 py-2.5"><Database className="text-blue-600" size={22}/><h2 className="text-sm font-bold text-[#102d55]">System Lineage Details</h2></div>
+    <div className="overflow-x-auto px-1.5"><table className="w-full min-w-[1180px] border-collapse text-left">
+      <thead><tr className="bg-blue-50/80 text-[10px] font-semibold text-[#173b70]">{["Hop", "System", "Table", "Attribute", "Record / Join Key", "Input Value(s)", "Transformation", "Values Used", "Output Value", "Consumed By", "Status"].map(x => <th key={x} className="border border-blue-100 px-2 py-2.5">{x}</th>)}</tr></thead>
+      <tbody>{rows.map(row => <tr key={row.hop} className="align-middle text-[11px] transition hover:bg-blue-50/50">
+        <td className="border border-blue-100 px-2 py-3 font-bold text-slate-800">{row.hop}</td>
+        <td className="border border-blue-100 px-2 py-2.5"><div className="flex min-w-[140px] items-center gap-2"><Database size={22} className={row.system === "AUDIT.DB" ? "text-orange-500" : row.system === "SENSI.DB" ? "text-violet-600" : "text-blue-500"}/><div><div className="font-semibold text-slate-900">{row.system}</div><div className="mt-0.5 text-[10px] text-slate-500">{row.systemLabel}</div></div></div></td>
+        <td className="border border-blue-100 px-2 py-3 font-medium">{row.table}</td><td className="border border-blue-100 px-2 py-3">{row.attribute}</td><td className="border border-blue-100 px-2 py-3 font-mono text-[10px]">{row.recordKey}</td><td className="border border-blue-100 px-2 py-3 font-semibold tabular-nums">{row.inputValue}</td>
+        <td className="border border-blue-100 px-2 py-3"><div className="min-w-[160px] whitespace-pre-wrap font-mono text-[10px] leading-4 text-slate-800">{row.transformation}</div></td><td className="border border-blue-100 px-2 py-3"><div className="min-w-[72px] whitespace-pre-wrap rounded-lg border border-blue-100 bg-blue-50 px-2 py-1 text-center font-semibold tabular-nums text-slate-800">{row.valuesUsed}</div></td><td className="border border-blue-100 px-2 py-3 font-bold tabular-nums">{row.outputValue}</td><td className="border border-blue-100 px-2 py-3 whitespace-pre-wrap">{row.consumedBy}</td><td className="border border-blue-100 px-2 py-3"><Status value={row.status}/></td>
+      </tr>)}</tbody>
+    </table></div>
+    {children}
+  </section>;
 }

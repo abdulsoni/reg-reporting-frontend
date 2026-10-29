@@ -1,40 +1,21 @@
-"use client";
+import { GitBranch, Check } from "lucide-react";
 
-import { Database, FilePlus2, GitBranch, ChevronDown, UserRound } from "lucide-react";
-
-type Props = {
-  onUploadPdf?: () => void;
-  onSelectDatasource?: () => void;
-};
-
-export default function DataLineageHeader({ onUploadPdf, onSelectDatasource }: Props) {
+export default function DataLineageHeader() {
+  const steps = ["Upload PDF", "Select Datapoint", "Data Lineage"];
   return (
-    <header className="flex min-h-[58px] items-center justify-between gap-4 bg-[#123866] px-5 text-white shadow-sm">
+    <header className="flex min-h-[52px] items-center justify-between gap-4 bg-[#102d55] px-5 text-white shadow-sm sm:px-7">
       <div className="flex items-center gap-3">
-        <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-white/10">
-          <GitBranch size={21} />
-        </div>
-        <span className="text-base font-semibold tracking-tight">Lineage Tracer</span>
-        <span className="rounded-md bg-blue-500/40 px-2 py-1 text-xs font-semibold">IPDC</span>
+        <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-500/30"><GitBranch size={21} /></span>
+        <span className="text-base font-bold">Lineage Tracer</span>
+        <span className="rounded-md bg-blue-500/40 px-2.5 py-1 text-[11px] font-bold">POC</span>
       </div>
-
-      <nav className="flex items-center gap-5 text-sm">
-        <button onClick={onUploadPdf} className="hidden items-center gap-2 text-blue-100 transition hover:text-white sm:flex">
-          <FilePlus2 size={17} />
-          Upload PDF
-          <span className="text-lg leading-none text-sky-300">+</span>
-        </button>
-        <button onClick={onSelectDatasource} className="hidden items-center gap-2 text-blue-100 transition hover:text-white md:flex">
-          <Database size={17} />
-          Select Datasource
-          <span className="text-lg leading-none text-sky-300">+</span>
-        </button>
-        <button className="flex items-center gap-2 rounded-lg bg-white/10 px-3 py-2 hover:bg-white/15" aria-label="User menu">
-          <span className="flex h-7 w-7 items-center justify-center rounded-full bg-white text-xs font-bold text-[#123866]">AT</span>
-          <span className="hidden sm:inline">Abdul Tipu Sultan</span>
-          <ChevronDown size={15} />
-        </button>
-      </nav>
+      <div className="flex items-center gap-1 sm:gap-2">
+        {steps.map((step, i) => <div key={step} className={`flex items-center gap-1.5 rounded-lg px-1.5 py-1.5 text-[11px] font-semibold sm:gap-2 sm:px-2.5 ${i === 2 ? "bg-white/15 text-white" : "text-blue-100"}`}>
+          <span className={`flex h-6 w-6 items-center justify-center rounded-full text-xs ${i === 2 ? "bg-white text-[#102d55]" : "bg-blue-400/30"}`}>{i + 1}</span>
+          <span className="hidden sm:inline">{step}</span>
+          {i < 2 && <Check size={14} className="text-emerald-300" />}
+        </div>)}
+      </div>
     </header>
   );
 }

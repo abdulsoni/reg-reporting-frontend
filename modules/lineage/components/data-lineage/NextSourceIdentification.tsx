@@ -1,64 +1,17 @@
 "use client";
-
 import { useState } from "react";
-import { Clock3, Search, CheckCircle2, Database } from "lucide-react";
-import type { LineageRecord } from "./types";
+import { Search } from "lucide-react";
+import type { LineageRow } from "./types";
 
-type Props = {
-  record: LineageRecord | undefined;
-  onIdentify: (system: string) => void;
-};
-
-export default function NextSourceIdentification({ record, onIdentify }: Props) {
-  const [identifying, setIdentifying] = useState(false);
-
-  if (!record || record.connected) {
-    return (
-      <section className="flex flex-col gap-3 rounded-xl border border-emerald-100 bg-emerald-50/50 p-4 md:flex-row md:items-center">
-        <CheckCircle2 className="shrink-0 text-emerald-600" size={24} />
-        <div>
-          <h3 className="text-sm font-bold text-emerald-800">Source identification</h3>
-          <p className="mt-1 text-xs text-emerald-700">All currently listed systems are connected. Review the lineage evidence and verify any unresolved transformations.</p>
-        </div>
-      </section>
-    );
-  }
-
-  const handleIdentify = () => {
-    setIdentifying(true);
-    onIdentify(record.system);
-  };
-
-  return (
-    <section className="rounded-xl border border-blue-100 bg-blue-50/50 p-4">
-      <div className="grid gap-4 lg:grid-cols-[minmax(240px,1.6fr)_1fr_1.2fr_1fr_auto] lg:items-center">
-        <div className="flex items-start gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-700"><Clock3 size={19} /></div>
-          <div>
-            <h3 className="text-sm font-bold text-blue-800">Next source identification</h3>
-            <p className="mt-1 text-xs leading-5 text-slate-600">{record.system} is not currently connected. Identify its source to continue the reverse trace.</p>
-          </div>
-        </div>
-        <div className="border-l border-blue-100 pl-3">
-          <div className="text-[11px] text-slate-500">Source system</div>
-          <div className="mt-1 flex items-center gap-1.5 text-xs font-semibold text-slate-800"><Database size={13} />{record.system}</div>
-        </div>
-        <div className="border-l border-blue-100 pl-3">
-          <div className="text-[11px] text-slate-500">Last known table / attribute</div>
-          <div className="mt-1 text-xs font-semibold text-slate-800">{record.table} / {record.attribute}</div>
-        </div>
-        <div className="border-l border-blue-100 pl-3">
-          <div className="text-[11px] text-slate-500">Connection status</div>
-          <span className="mt-1 inline-flex rounded-full bg-amber-100 px-2 py-1 text-[10px] font-semibold text-amber-800">Discovering</span>
-        </div>
-        <button
-          onClick={handleIdentify}
-          disabled={identifying}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-4 py-3 text-xs font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-wait disabled:opacity-70"
-        >
-          <Search size={15} /> {identifying ? "Opening..." : "Identify source"}
-        </button>
-      </div>
-    </section>
-  );
+export default function NextSourceIdentification({ row, onIdentify }: { row?: LineageRow; onIdentify: (system: string) => void }) {
+  const [busy, setBusy] = useState(false);
+  if (!row) return null;
+  return <div className="mx-2 mb-2 border-t border-blue-100 bg-blue-50/70 px-3 py-3"><div className="grid gap-3 lg:grid-cols-[minmax(280px,1.7fr)_0.75fr_1.25fr_1fr_0.8fr_auto] lg:items-center">
+    <div className="flex items-center gap-3"><span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600"><Search size={20}/></span><div><h3 className="text-xs font-bold text-[#123866]">Next source identification</h3><p className="mt-1 text-[10px] leading-4 text-slate-600">{row.system} is not fully connected. Please identify the source to complete the lineage.</p></div></div>
+    <div className="border-l border-blue-200 pl-3"><p className="text-[10px] text-slate-500">Source system</p><p className="mt-1 text-[11px] font-semibold">{row.system}</p></div>
+    <div className="border-l border-blue-200 pl-3"><p className="text-[10px] text-slate-500">Last known table / attribute</p><p className="mt-1 text-[11px] font-semibold">{row.table} / {row.attribute}</p></div>
+    <div className="border-l border-blue-200 pl-3"><p className="text-[10px] text-slate-500">Join key</p><p className="mt-1 text-[11px] font-mono font-semibold">trade_id = TRD-00981</p></div>
+    <div className="border-l border-blue-200 pl-3"><p className="text-[10px] text-slate-500">Connection status</p><span className="mt-1 inline-block rounded-full border border-amber-300 bg-amber-50 px-2 py-0.5 text-[10px] text-amber-700">Discovering</span></div>
+    <button disabled={busy} onClick={() => { setBusy(true); onIdentify(row.system); }} className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2.5 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700 disabled:opacity-70"><Search size={14}/>{busy ? "Requested" : "Identify source"}</button>
+  </div></div>;
 }
