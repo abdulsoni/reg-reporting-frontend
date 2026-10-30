@@ -189,7 +189,7 @@ export default function SystemTableLineage() {
           </p>
         </div>
 
-        {scenarioPicker}
+        {/* {scenarioPicker} */}
       </div>
 
       <div className="flex flex-wrap items-center gap-3">
@@ -211,7 +211,7 @@ export default function SystemTableLineage() {
           Could not reach the lineage API. Showing the bundled snapshot.
         </p>
       )}
-
+      {!error && (
       <section className="panel p-5">
         <SystemLineageGraph
           key={`${scenarioId}:${activeTrace?.entry.key ?? "none"}`}
@@ -225,6 +225,7 @@ export default function SystemTableLineage() {
           onClearHighlight={clearSearchTrace}
         />
       </section>
+      )}
     </div>
   );
 }

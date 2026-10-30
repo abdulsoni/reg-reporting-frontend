@@ -11,11 +11,13 @@ type ConnectParams = {
   // username: string;
   // password: string;
   report_name:string | undefined;
+ // object_name:string
 };
 
 export function useDatabaseConnection() {
   const [connecting, setConnecting] = useState(false);
   const [connected, setConnected] = useState(false);
+  const [allconnected, setAllConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   const connect = async (params: ConnectParams) => {
@@ -25,9 +27,9 @@ export function useDatabaseConnection() {
 
     try {
       const response = await connectDatabase(params);
-
+      console.log('connect response',response);
       setConnected(true);
-
+      //setAllConnected()
       return response;
     } catch (err) {
       setConnected(false);

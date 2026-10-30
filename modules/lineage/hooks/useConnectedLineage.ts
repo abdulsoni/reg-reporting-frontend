@@ -25,6 +25,7 @@ export function useConnectedLineage() {
 
     async function load() {
       try {
+        console.log('loading123')
         const response = await fetch(apiUrl("/lineage/connected"), {
           signal: controller.signal,
           headers: { Accept: "*/*" },
@@ -34,6 +35,8 @@ export function useConnectedLineage() {
         const payload = (await response
           .json()
           .catch(() => null)) as ConnectedLineagePayload | null;
+
+        console.log('payload',payload)
 
         if (payload && typeof payload.allSystemsConnected === "boolean") {
           if (active) {
@@ -53,6 +56,7 @@ export function useConnectedLineage() {
 
         throw new Error("Invalid /lineage/connected response");
       } catch (cause) {
+        console.log('cause',cause)
         if (active) {
           setData(null);
           setError(

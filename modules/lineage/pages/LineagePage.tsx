@@ -38,8 +38,8 @@ export function LineagePage() {
             <button
               onClick={() => setMode("reverse")}
               className={`rounded-md px-4 py-2 text-[11px] font-semibold transition ${mode === "reverse"
-                  ? "bg-navy text-white shadow-sm"
-                  : "text-slate-500 hover:text-ink"
+                ? "bg-navy text-white shadow-sm"
+                : "text-slate-500 hover:text-ink"
                 }`}
             >
               Reverse lineage
@@ -48,8 +48,8 @@ export function LineagePage() {
             <button
               onClick={() => setMode("forward")}
               className={`rounded-md px-4 py-2 text-[11px] font-semibold transition ${mode === "forward"
-                  ? "bg-navy text-white shadow-sm"
-                  : "text-slate-500 hover:text-ink"
+                ? "bg-navy text-white shadow-sm"
+                : "text-slate-500 hover:text-ink"
                 }`}
             >
               Forward lineage
@@ -59,11 +59,12 @@ export function LineagePage() {
 
         {/* 3-column panels */}
         <div className="grid grid-cols-1 gap-5 lg:grid-cols-[1fr_2fr_1fr]">
-          <RegulatoryReportPanel />
-          <DataPointPanel />
-          <SourceSystemPanel
-            onConnect={() => router.push("/lineage/trace-progress")}
-          />
+            <RegulatoryReportPanel />
+            <DataPointPanel />
+            <SourceSystemPanel
+              onConnect={() => router.push("/lineage/trace-progress")}
+              hideTitle={false}
+            />
         </div>
       </main>
     </div>

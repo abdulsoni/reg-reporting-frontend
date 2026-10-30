@@ -9,10 +9,22 @@ import {
   FileUp,
   CheckCircle2,
 } from "lucide-react";
-import { useReportUpload } from "../hooks/useReportUpload";
-import { useReports } from "../context/ReportContext";
-import { mapApiResponseToReport } from "../utils/reportMapper";
-import { UploadedReportResponse } from "../types/report";
+
+import {
+  useReportUpload,
+} from "../hooks/useReportUpload";
+
+import {
+  useReports,
+} from "../context/ReportContext";
+
+import {
+  mapApiResponseToReport,
+} from "../utils/reportMapper";
+
+import {
+  UploadedReportResponse,
+} from "../types/report";
 
 
 export function RegulatoryReportPanel() {
@@ -104,6 +116,12 @@ export function RegulatoryReportPanel() {
         );
 
       }
+
+
+      console.log(
+        "Upload response:",
+        response
+      );
 
 
       /*
@@ -257,10 +275,11 @@ export function RegulatoryReportPanel() {
       {selectedFile && (
 
         <div
-          className={`mt-4 flex items-center gap-2 rounded-lg px-3 py-2.5 ${uploaded
+          className={`mt-4 flex items-center gap-2 rounded-lg px-3 py-2.5 ${
+            uploaded
               ? "bg-emerald-50"
               : "bg-slate-100"
-            }`}
+          }`}
         >
 
           {uploaded ? (
@@ -281,10 +300,11 @@ export function RegulatoryReportPanel() {
 
 
           <span
-            className={`truncate font-mono text-[11px] font-semibold ${uploaded
+            className={`truncate font-mono text-[11px] font-semibold ${
+              uploaded
                 ? "text-emerald-800"
                 : "text-slate-700"
-              }`}
+            }`}
           >
 
             {selectedFile.name}
