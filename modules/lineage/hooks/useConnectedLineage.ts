@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { apiUrl } from "../lib/config";
+import { getLatestReportName } from "../services/reportStorage";
 import type { ConnectedLineageResponse } from "../types/lineage";
 
 type ConnectedLineagePayload = ConnectedLineageResponse & {
@@ -14,7 +15,7 @@ type ConnectedLineagePayload = ConnectedLineageResponse & {
  * backend answers 409 with `allSystemsConnected: false` while sources are
  * still missing, so the body is parsed before the HTTP status is evaluated.
  */
-export function useConnectedLineage() {
+export function useConnectedLineage(reportName?: string | null) {
   const [data, setData] = useState<ConnectedLineageResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -25,18 +26,24 @@ export function useConnectedLineage() {
 
     async function load() {
       try {
-        console.log('loading123')
-        const response = await fetch(apiUrl("/lineage/connected"), {
-          signal: controller.signal,
-          headers: { Accept: "*/*" },
-          cache: "no-store",
-        });
+        const activeReportName = reportName?.trim() || getLatestReportName();
+
+        const params = new URLSearchParams();
+        if (activeReportName) params.set("report_name", activeReportName);
+        const query = params.toString();
+
+        const response = await fetch(
+          apiUrl(`/lineage/connected${query ? `?${query}` : ""}`),
+          {
+            signal: controller.signal,
+            headers: { Accept: "*/*" },
+            cache: "no-store",
+          }
+        );
 
         const payload = (await response
           .json()
           .catch(() => null)) as ConnectedLineagePayload | null;
-
-        console.log('payload',payload)
 
         if (payload && typeof payload.allSystemsConnected === "boolean") {
           if (active) {
@@ -56,7 +63,6 @@ export function useConnectedLineage() {
 
         throw new Error("Invalid /lineage/connected response");
       } catch (cause) {
-        console.log('cause',cause)
         if (active) {
           setData(null);
           setError(
@@ -76,7 +82,7 @@ export function useConnectedLineage() {
       active = false;
       controller.abort();
     };
-  }, []);
+  }, [reportName]);
 
   return { data, loading, error };
 }

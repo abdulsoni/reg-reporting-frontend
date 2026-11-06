@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 
 import { getLineageData } from "../api/lineageDataApi";
+import { useReports } from "../context/ReportContext";
 import {
   DEFAULT_SCENARIO_ID,
   getScenario,
@@ -16,6 +17,9 @@ import type { LineageData } from "../types/lineage";
  * always has something to render. Re-fetches when the selected scenario changes.
  */
 export function useLineageData(scenarioId: ScenarioId = DEFAULT_SCENARIO_ID) {
+  const { selectedReport } = useReports();
+  const reportName = selectedReport?.regulatoryReturn ?? null;
+
   const [remote, setRemote] = useState<{
     id: ScenarioId;
     data: LineageData;
@@ -28,7 +32,7 @@ export function useLineageData(scenarioId: ScenarioId = DEFAULT_SCENARIO_ID) {
   useEffect(() => {
     let active = true;
 
-    getLineageData(scenarioId)
+    getLineageData(scenarioId, reportName)
       .then((data) => {
         if (!active) return;
         setRemote({ id: scenarioId, data });
@@ -48,7 +52,7 @@ export function useLineageData(scenarioId: ScenarioId = DEFAULT_SCENARIO_ID) {
     return () => {
       active = false;
     };
-  }, [scenarioId]);
+  }, [scenarioId, reportName]);
 
   // Prefer the freshly fetched response for this scenario; otherwise fall back
   // to the local scenario until the request resolves.

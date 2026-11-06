@@ -13,6 +13,7 @@ import {
 
 import { SourceSystemPanel } from "./SourceSystemPanel";
 import { useReports } from "../context/ReportContext";
+import { getLatestReportName } from "../services/reportStorage";
 import { ReverseLineageResponse } from "../types/trace";
 import { getReverseLineage, ReverseLineageRequest } from "../services/lineageApi";
 
@@ -97,14 +98,18 @@ function toDisplayRow(row: DisplayRowInput): ConnectedLineageRow {
   };
 }
 
-function connectedLineageUrl(): string {
+function connectedLineageUrl(reportName?: string | null): string {
   const base = (
     process.env.NEXT_PUBLIC_API_BASE_URL ||
     process.env.NEXT_PUBLIC_API_URL ||
     "http://127.0.0.1:8000"
   ).replace(/\/$/, "");
 
-  return `${base}/lineage/connected`;
+  const params = new URLSearchParams();
+  if (reportName?.trim()) params.set("report_name", reportName.trim());
+  const query = params.toString();
+
+  return `${base}/lineage/connected${query ? `?${query}` : ""}`;
 }
 
 export function TraceProgressPanel() {
@@ -116,7 +121,11 @@ export function TraceProgressPanel() {
     database,
     setDbType,
     setDatabase,
+    selectedReport,
   } = useReports();
+
+  const reportName =
+    selectedReport?.regulatoryReturn ?? getLatestReportName();
 
   /*
    * Latest API response.
@@ -303,7 +312,7 @@ export function TraceProgressPanel() {
   const refreshConnectedStatus = async () => {
     try {
       const response = await fetch(
-        connectedLineageUrl(),
+        connectedLineageUrl(reportName),
         {
           headers: { Accept: "*/*" },
           cache: "no-store",
@@ -353,7 +362,7 @@ export function TraceProgressPanel() {
     const bootstrap = async () => {
       try {
         const response = await fetch(
-          connectedLineageUrl(),
+          connectedLineageUrl(reportName),
           {
             signal: controller.signal,
             headers: { Accept: "*/*" },
@@ -425,7 +434,7 @@ export function TraceProgressPanel() {
       active = false;
       controller.abort();
     };
-  }, []);
+  }, [reportName]);
 
   /*
    * Count unique systems whenever a new

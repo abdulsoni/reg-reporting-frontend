@@ -49,99 +49,35 @@ import { apiUrl } from "../lib/config";
 
 
 import { DEFAULT_SCENARIO_ID, type ScenarioId } from "../data/scenarios";
+import { getLatestReportName } from "../services/reportStorage";
 import type { LineageData } from "../types/lineage";
 
-interface StoredReport {
-  id?: string;
-  fileName?: string;
-  uploadedAt?: string;
-  regulatoryReturn?: string;
-  pages?: { page?: number; text?: string }[];
-  [key: string]: unknown;
-}
-
-const REPORTS_STORAGE_KEY = "regulatory_reports";
-
-function clean(value: unknown): string | null {
-  return typeof value === "string" && value.trim() ? value.trim() : null;
-}
-
-/** The name the backend stores: first line of the PDF, minus a trailing dot. */
-function reportNameOf(report: StoredReport): string | null {
-  const direct =
-    clean(report.regulatoryReturn) ??
-    clean(report.reportName) ??
-    clean(report.report_name) ??
-    clean(report.name) ??
-    clean(report.title);
-
-  if (direct) return direct.replace(/\.$/, "").trim();
-
-  const firstLine = clean(report.pages?.[0]?.text?.split("\n")[0]);
-  if (firstLine) return firstLine.replace(/\.$/, "").trim();
-
-  const file = clean(report.fileName);
-  return file ? file.replace(/\.pdf$/i, "") : null;
-}
-
-function getFirstReportNameFromStorage(reportId?: string): string | null {
-  if (typeof window === "undefined") return null;
-
-  try {
-    const raw = localStorage.getItem(REPORTS_STORAGE_KEY);
-    if (!raw) return null;
-
-    const parsed: unknown = JSON.parse(raw);
-    if (!Array.isArray(parsed) || parsed.length === 0) return null;
-
-    const reports = parsed.filter(
-      (item): item is StoredReport => !!item && typeof item === "object"
-    );
-
-    // An explicit id wins.
-    if (reportId) {
-      const match = reports.find((r) => r.id === reportId);
-      if (match) return reportNameOf(match);
-    }
-
-    // Otherwise use the most recently uploaded report.
-    const latestFirst = [...reports].sort(
-      (a, b) =>
-        (Date.parse(b.uploadedAt ?? "") || 0) -
-        (Date.parse(a.uploadedAt ?? "") || 0)
-    );
-
-    for (const report of latestFirst) {
-      const name = reportNameOf(report);
-      if (name) return name;
-    }
-  } catch (error) {
-    console.error("Failed to read report name from localStorage:", error);
-  }
-
-  return null;
-}
-
 /**
- * Fetch the full lineage graph from the single graph endpoint. The request is
- * same-origin (served by the local route handler) rather than an external API.
+ * Fetch the full lineage graph from the metadata endpoint, scoped to the
+ * report the user currently has selected.
  */
 export async function getLineageData(
-  scenarioId: ScenarioId = DEFAULT_SCENARIO_ID
+  scenarioId: ScenarioId = DEFAULT_SCENARIO_ID,
+  reportName?: string | null
 ): Promise<LineageData> {
   // const response = await fetch(
   //   `/api/lineage/graph?scenario=${encodeURIComponent(scenarioId)}`,
   //   { cache: "no-store" }
   // );
-  const reportName = getFirstReportNameFromStorage();
-  console.log('reportName',reportName)
-  const response = await fetch(apiUrl(`/api/lineage/metadata?report_name=${reportName}`), {
-    cache: "no-store",
-  });
+  const activeReportName = reportName?.trim() || getLatestReportName();
+
+  const params = new URLSearchParams();
+  if (activeReportName) params.set("report_name", activeReportName);
+  const query = params.toString();
+
+  const response = await fetch(
+    apiUrl(`/api/lineage/metadata${query ? `?${query}` : ""}`),
+    { cache: "no-store" }
+  );
 
   if (!response.ok) {
     throw new Error("Failed to load lineage data");
   }
-  
+
   return response.json();
 }
