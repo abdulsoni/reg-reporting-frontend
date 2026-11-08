@@ -1,8 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Link from "next/link";
 import {
   ArrowDownRight,
+  ArrowLeft,
   ArrowRight,
   CheckCircle2,
   Download,
@@ -359,9 +361,15 @@ export function LineageEvidence({
     datapointId
   );
 
-  const hasDatapoint = Boolean(
+  const backHref =
     reportName?.trim() && datapointId?.trim()
-  );
+      ? `/lineage/data-lineage?${new URLSearchParams({
+          report_name: reportName.trim(),
+          datapoint_id: datapointId.trim(),
+        }).toString()}`
+      : null;
+
+  const hasDatapoint = backHref !== null;
 
   const [view, setView] = useState<"system" | "datapoint">(
     hasDatapoint ? "datapoint" : "system"
@@ -479,6 +487,16 @@ export function LineageEvidence({
             <span className="text-xs text-slate-500">
               Open a datapoint to load its trace graph.
             </span>
+          )}
+
+          {view === "datapoint" && backHref && (
+            <Link
+              href={backHref}
+              className="ml-auto inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-semibold text-slate-600 hover:bg-slate-50"
+            >
+              <ArrowLeft size={13} />
+              Back to datapoint lineage
+            </Link>
           )}
         </div>
 
