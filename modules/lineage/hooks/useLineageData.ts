@@ -1,20 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-
 import { getLineageData } from "../api/lineageDataApi";
 import { useReports } from "../context/ReportContext";
-import {
-  DEFAULT_SCENARIO_ID,
-  getScenario,
-  type ScenarioId,
-} from "../data/scenarios";
 import type { LineageData } from "../types/lineage";
+import { DEFAULT_SCENARIO_ID, getScenario, ScenarioId } from "../data/scenarios";
+
+export type LineageDataState = {
+  data: LineageData;
+  loading: boolean;
+  error: string | null;
+};
 
 /**
- * Loads the single lineage graph response. While the request is in flight (or
- * if it fails) the matching bundled local scenario is shown, so the explorer
- * always has something to render. Re-fetches when the selected scenario changes.
+ * Loads the single lineage response. The response is bundled with the app, so
+ * it is available synchronously and needs no request lifecycle.
  */
 export function useLineageData(scenarioId: ScenarioId = DEFAULT_SCENARIO_ID) {
   const { selectedReport } = useReports();
@@ -228,3 +228,10 @@ export function useLineageData(scenarioId: ScenarioId = DEFAULT_SCENARIO_ID) {
   //   };
   return { data, loading, error: errorMessage };
 }
+// export function useLineageData(): LineageDataState {
+//   return {
+//     data: getLineageData(),
+//     loading: false,
+//     error: null,
+//   };
+// }

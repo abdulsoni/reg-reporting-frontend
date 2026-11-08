@@ -1,1 +1,1 @@
-export {getReverseLineage} from "./services/lineageApi"
+export { getDataTrace, getReverseLineage } from "./services/lineageApi"

@@ -16,6 +16,7 @@ import {
   Position,
   MarkerType,
   BaseEdge,
+  EdgeLabelRenderer,
   getSmoothStepPath,
   type Edge,
   type EdgeProps,
@@ -49,7 +50,10 @@ import type {
   LineageData,
   LineageEdge,
   LineageEndpoint,
+  LineageTraceRole,
 } from "../types/lineage";
+import type { DataTraceValue } from "../types/dataTrace";
+import { formatTraceValue } from "../utils/dataTraceMapper";
 
 function SystemNode({ data }: NodeProps<SystemFlowNode>) {
   const frame = data.target ? "border-emerald-500" : "border-slate-300";
@@ -195,6 +199,13 @@ function TableNode({ data }: NodeProps<TableFlowNode>) {
   );
 }
 
+const TRACE_ROLE_STYLES: Record<LineageTraceRole, string> = {
+  source: "border-sky-200 bg-sky-50 text-sky-700",
+  input: "border-blue-200 bg-blue-50 text-blue-700",
+  intermediate: "border-violet-200 bg-violet-50 text-violet-700",
+  output: "border-emerald-200 bg-emerald-50 text-emerald-700",
+};
+
 function AttributeNode({ data }: NodeProps<AttributeFlowNode>) {
   const frame = data.isTraceTarget
     ? "border-blue-600 bg-blue-50 ring-2 ring-blue-400/60"
@@ -203,6 +214,14 @@ function AttributeNode({ data }: NodeProps<AttributeFlowNode>) {
       : data.selected
         ? "border-slate-900 bg-white ring-2 ring-slate-900/10"
         : "border-slate-300 bg-white hover:border-slate-400";
+
+  const hasTraceValue = data.traced || data.value !== undefined;
+  const valueStyle = data.traceRole
+    ? TRACE_ROLE_STYLES[data.traceRole]
+    : "border-slate-200 bg-slate-50 text-slate-700";
+  const valueMeta = [data.hop ? `hop ${data.hop}` : null, data.recordKey]
+    .filter(Boolean)
+    .join(" · ");
 
   return (
     <div
@@ -224,6 +243,22 @@ function AttributeNode({ data }: NodeProps<AttributeFlowNode>) {
           {data.dataType}
         </div>
       </div>
+
+      {hasTraceValue && (
+        <div className="ml-2 flex shrink-0 flex-col items-end">
+          <span
+            className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums ${valueStyle}`}
+          >
+            {formatTraceValue(data.value)}
+          </span>
+
+          {valueMeta && (
+            <span className="mt-0.5 max-w-[96px] truncate font-mono text-[8px] text-slate-400">
+              {valueMeta}
+            </span>
+          )}
+        </div>
+      )}
 
       {data.status !== "confirmed" && (
         <span className="ml-2 shrink-0 rounded-full bg-amber-100 px-1.5 py-0.5 text-[8px] font-semibold uppercase text-amber-700">
@@ -296,9 +331,12 @@ function ExpandedLineageEdge(props: EdgeProps) {
     markerStart,
     style,
     data,
+    label,
   } = props;
 
   let path: string;
+  let labelX = (sourceX + targetX) / 2;
+  let labelY = (sourceY + targetY) / 2;
 
   const edgeData = data as
     | { rightSide?: boolean; sameTable?: boolean }
@@ -307,8 +345,11 @@ function ExpandedLineageEdge(props: EdgeProps) {
   if (edgeData?.rightSide || edgeData?.sameTable) {
     const laneX = Math.max(sourceX, targetX) + 36;
     path = `M ${sourceX},${sourceY} L ${laneX},${sourceY} L ${laneX},${targetY} L ${targetX},${targetY}`;
+
+    labelX = laneX;
+    labelY = (sourceY + targetY) / 2;
   } else {
-    [path] = getSmoothStepPath({
+    [path, labelX, labelY] = getSmoothStepPath({
       sourceX,
       sourceY,
       sourcePosition,
@@ -320,7 +361,31 @@ function ExpandedLineageEdge(props: EdgeProps) {
     });
   }
 
-  return <BaseEdge id={id} path={path} markerStart={markerStart} style={style} />;
+  return (
+    <>
+      <BaseEdge
+        id={id}
+        path={path}
+        markerStart={markerStart}
+        style={style}
+      />
+
+      {label && (
+        <EdgeLabelRenderer>
+          <div
+            style={{
+              position: "absolute",
+              transform: `translate(-50%, -50%) translate(${labelX}px, ${labelY}px)`,
+              pointerEvents: "none",
+            }}
+            className="rounded-full border border-blue-200 bg-white/95 px-1.5 py-0.5 font-mono text-[9px] font-bold text-blue-700 shadow-sm"
+          >
+            {label}
+          </div>
+        </EdgeLabelRenderer>
+      )}
+    </>
+  );
 }
 
 const nodeTypes = {
@@ -438,6 +503,9 @@ type FlowEdgeData = {
   sameTable?: boolean;
   rightSide?: boolean;
   summary?: boolean;
+  traced?: boolean;
+  hop?: string;
+  output?: DataTraceValue;
 };
 
 export default function SystemLineageGraph({
@@ -644,6 +712,14 @@ export default function SystemLineageGraph({
   const traceTargetHops = highlight
     ? (highlight.parents.get(endpointKey(highlight.target)) ?? [])
     : [];
+  const dataTraceReconciliation =
+    highlight &&
+    data.trace &&
+    data.trace.focus.systemId === highlight.target.systemId &&
+    data.trace.focus.tableId === highlight.target.tableId &&
+    data.trace.focus.attributeId === highlight.target.attributeId
+      ? data.trace.reconciliation
+      : null;
 
   function renderTracePath(
     endpoint: LineageEndpoint,
@@ -703,6 +779,35 @@ export default function SystemLineageGraph({
             resolution.attribute?.transformation && (
               <div className="mt-0.5 break-all font-mono text-[10px] text-slate-500">
                 {resolution.attribute.transformation}
+              </div>
+            )}
+
+          {resolution.kind === "resolved" &&
+            resolution.attribute &&
+            (resolution.attribute.traced ||
+              resolution.attribute.value !== undefined) && (
+              <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                <span
+                  className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums ${
+                    resolution.attribute.traceRole
+                      ? TRACE_ROLE_STYLES[resolution.attribute.traceRole]
+                      : "border-slate-200 bg-slate-50 text-slate-700"
+                  }`}
+                >
+                  {formatTraceValue(resolution.attribute.value)}
+                </span>
+
+                {resolution.attribute.hop && (
+                  <span className="font-mono text-[9px] text-slate-400">
+                    hop {resolution.attribute.hop}
+                  </span>
+                )}
+
+                {resolution.attribute.recordKey && (
+                  <span className="font-mono text-[9px] text-slate-400">
+                    {resolution.attribute.recordKey}
+                  </span>
+                )}
               </div>
             )}
 
@@ -856,6 +961,47 @@ export default function SystemLineageGraph({
                 </ul>
               </div>
             )}
+
+          {selectedEdgeDetails.edge.trace && (
+            <div>
+              <div className="text-xs text-slate-500">Traced values</div>
+              <div className="mt-1 space-y-1 rounded-md border border-blue-100 bg-blue-50/60 p-2.5 text-[11px] text-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span>Hop</span>
+                  <span className="font-mono font-semibold text-blue-700">
+                    {selectedEdgeDetails.edge.trace.hop}
+                  </span>
+                </div>
+
+                <div className="flex items-start justify-between gap-2">
+                  <span>Inputs</span>
+                  <span className="text-right font-mono">
+                    {selectedEdgeDetails.edge.trace.inputs.length > 0
+                      ? selectedEdgeDetails.edge.trace.inputs
+                          .map(formatTraceValue)
+                          .join(", ")
+                      : "—"}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between gap-2">
+                  <span>Output</span>
+                  <span className="font-mono font-semibold text-emerald-700">
+                    {formatTraceValue(selectedEdgeDetails.edge.trace.output)}
+                  </span>
+                </div>
+
+                {selectedEdgeDetails.edge.trace.aggregation && (
+                  <div className="flex items-start justify-between gap-2">
+                    <span>Aggregation</span>
+                    <span className="text-right font-mono">
+                      {selectedEdgeDetails.edge.trace.aggregation}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
             </SideDetailPanel>
           ) : selectedAttributeDetails ? (
             <SideDetailPanel
@@ -880,6 +1026,55 @@ export default function SystemLineageGraph({
                 "Direct source column — no transformation expression."}
             </pre>
           </div>
+
+          {(selectedAttributeDetails.attribute.traced ||
+            selectedAttributeDetails.attribute.value !== undefined) && (
+            <div>
+              <div className="text-xs text-slate-500">Traced value</div>
+              <div className="mt-1 space-y-1 rounded-md border border-blue-100 bg-blue-50/60 p-2.5 text-[11px] text-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span>Value</span>
+                  <span className="font-mono text-sm font-bold text-blue-700">
+                    {formatTraceValue(selectedAttributeDetails.attribute.value)}
+                  </span>
+                </div>
+
+                {selectedAttributeDetails.attribute.recordKey && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Record key</span>
+                    <span className="font-mono">
+                      {selectedAttributeDetails.attribute.recordKey}
+                    </span>
+                  </div>
+                )}
+
+                {selectedAttributeDetails.attribute.hop && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Hop</span>
+                    <span className="font-mono">
+                      {selectedAttributeDetails.attribute.hop}
+                    </span>
+                  </div>
+                )}
+
+                {selectedAttributeDetails.attribute.traceRole && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Role</span>
+                    <span className="capitalize">
+                      {selectedAttributeDetails.attribute.traceRole}
+                    </span>
+                  </div>
+                )}
+
+                {selectedAttributeDetails.attribute.traceStatus && (
+                  <div className="flex items-center justify-between gap-2">
+                    <span>Status</span>
+                    <span>{selectedAttributeDetails.attribute.traceStatus}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="text-xs text-slate-500">
@@ -999,6 +1194,37 @@ export default function SystemLineageGraph({
                   {traceTargetResolution.attribute.transformation}
                 </pre>
               )}
+
+            {traceTargetResolution?.kind === "resolved" &&
+              traceTargetResolution.attribute &&
+              (traceTargetResolution.attribute.traced ||
+                traceTargetResolution.attribute.value !== undefined) && (
+                <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={`rounded border px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums ${
+                      traceTargetResolution.attribute.traceRole
+                        ? TRACE_ROLE_STYLES[
+                            traceTargetResolution.attribute.traceRole
+                          ]
+                        : "border-slate-200 bg-slate-50 text-slate-700"
+                    }`}
+                  >
+                    {formatTraceValue(traceTargetResolution.attribute.value)}
+                  </span>
+
+                  {traceTargetResolution.attribute.hop && (
+                    <span className="font-mono text-[9px] text-slate-400">
+                      hop {traceTargetResolution.attribute.hop}
+                    </span>
+                  )}
+
+                  {traceTargetResolution.attribute.recordKey && (
+                    <span className="font-mono text-[9px] text-slate-400">
+                      {traceTargetResolution.attribute.recordKey}
+                    </span>
+                  )}
+                </div>
+              )}
           </div>
 
           <div>
@@ -1033,6 +1259,44 @@ export default function SystemLineageGraph({
               </p>
             )}
           </div>
+
+          {dataTraceReconciliation && (
+            <div>
+              <div className="text-xs text-slate-500">Value reconciliation</div>
+              <div className="mt-1 space-y-1 rounded-md border border-blue-100 bg-blue-50/60 p-2.5 text-[11px] text-slate-700">
+                <div className="flex items-center justify-between gap-2">
+                  <span>Reported value</span>
+                  <span className="font-mono font-semibold text-blue-700">
+                    {formatTraceValue(dataTraceReconciliation.reportedValue)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span>Calculated value</span>
+                  <span className="font-mono font-semibold text-emerald-700">
+                    {formatTraceValue(dataTraceReconciliation.calculatedValue)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span>Variance</span>
+                  <span className="font-mono">
+                    {formatTraceValue(dataTraceReconciliation.variance)}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between gap-2">
+                  <span>Result</span>
+                  <span
+                    className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                      dataTraceReconciliation.result === "Match"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {dataTraceReconciliation.result}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
 
           <div>
             <div className="text-xs text-slate-500">

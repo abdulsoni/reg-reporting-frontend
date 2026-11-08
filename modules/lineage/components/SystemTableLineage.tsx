@@ -1,7 +1,8 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 
+import DataTraceSummary from "./DataTraceSummary";
 import LineageSearch from "./LineageSearch";
 import SystemLineageGraph from "./SystemLineageGraph";
 import { useLineageData } from "../hooks/useLineageData";
@@ -10,6 +11,11 @@ import {
   SCENARIO_IDS,
   type ScenarioId,
 } from "../data/scenarios";
+import {
+  buildDataTraceEntry,
+  buildDataTraceUpstreamTrace,
+  deriveDataTraceExpansion,
+} from "../lib/dataTraceHighlight";
 import {
   buildAttributeSearchEntry,
   collectUpstreamTrace,
@@ -20,7 +26,7 @@ import {
   deriveTraceExpansion,
   traceUsesTable,
 } from "../lib/systemGraphHighlight";
-import type { LineageEndpoint } from "../types/lineage";
+import type { LineageData, LineageEndpoint } from "../types/lineage";
 
 const SCENARIO_LABELS: Record<ScenarioId, string> = {
   A: "normalized_data only",
@@ -28,16 +34,39 @@ const SCENARIO_LABELS: Record<ScenarioId, string> = {
   C: "all connected",
 };
 
-export default function SystemTableLineage() {
+export function SystemLineageView({
+  data,
+  loading,
+}: {
+  data: LineageData;
+  loading?: boolean;
+}) {
+  /*
+   * When the response carries a data-level trace, open the systems and tables
+   * that own the traced values and highlight the traced path on first load.
+   */
+  const initialExpansion = useMemo(
+    () => deriveDataTraceExpansion(data),
+    [data]
+  );
+  const initialTrace = useMemo(() => {
+    const trace = buildDataTraceUpstreamTrace(data);
+    const entry = buildDataTraceEntry(data);
+
+    return trace && entry ? { entry, trace } : null;
+  }, [data]);
+
   const [scenarioId, setScenarioId] = useState<ScenarioId>(DEFAULT_SCENARIO_ID);
-  const [expandedSystems, setExpandedSystems] = useState<string[]>([]);
-  const [expandedTables, setExpandedTables] = useState<string[]>([]);
+  const [expandedSystems, setExpandedSystems] = useState<string[]>(
+    initialExpansion.systemIds
+  );
+  const [expandedTables, setExpandedTables] = useState<string[]>(
+    initialExpansion.tableIds
+  );
   const [activeTrace, setActiveTrace] = useState<{
     entry: AttributeSearchEntry;
     trace: UpstreamTrace;
-  } | null>(null);
-
-  const { data, loading, error } = useLineageData(scenarioId);
+  } | null>(initialTrace);
 
   const toggleSystem = useCallback(
     (systemId: string) => {
@@ -206,12 +235,8 @@ export default function SystemTableLineage() {
         )}
       </div>
 
-      {error && (
-        <p className="text-xs text-amber-600">
-          Could not reach the lineage API. Showing the bundled snapshot.
-        </p>
-      )}
-      {!error && (
+      <DataTraceSummary data={data} />
+
       <section className="panel p-5">
         <SystemLineageGraph
           key={`${scenarioId}:${activeTrace?.entry.key ?? "none"}`}
@@ -225,7 +250,17 @@ export default function SystemTableLineage() {
           onClearHighlight={clearSearchTrace}
         />
       </section>
-      )}
     </div>
   );
+}
+
+/**
+ * Explorer entry point: loads the report metadata graph and renders it.
+ * The evidence page uses `SystemLineageView` directly with the visual-graph
+ * response instead.
+ */
+export default function SystemTableLineage() {
+  const { data, loading } = useLineageData();
+
+  return <SystemLineageView data={data} loading={loading} />;
 }

@@ -20,7 +20,11 @@ function extractReportName(
       .map((line) => line.trim())
       .find(Boolean);
 
-  return firstLine || "Regulatory Report";
+  if (!firstLine) {
+    return "Regulatory Report";
+  }
+
+  return firstLine.replace(/[.]$/, "").trim();
 }
 
 
@@ -83,6 +87,15 @@ export function mapApiResponseToReport(
   response: UploadedReportResponse
 ): RegulatoryReport {
 
+  const reportName =
+    response.report?.reportName?.trim();
+
+  const bankName =
+    response.report?.bankName?.trim();
+
+  const reportDate =
+    response.report?.reportDate?.trim();
+
   return {
     id:
       `report-${Date.now()}-${Math.random()
@@ -96,16 +109,19 @@ export function mapApiResponseToReport(
       new Date().toISOString(),
 
     regulatoryReturn:
+      reportName ||
       extractReportName(
         response.pages
       ),
 
     reportingEntity:
+      bankName ||
       extractReportingEntity(
         response.pages
       ),
 
     reportingReferenceDate:
+      reportDate ||
       extractReferenceDate(
         response.pages
       ),
@@ -118,5 +134,8 @@ export function mapApiResponseToReport(
 
     tables:
       response.tables || [],
+
+    datapoints:
+      response.report?.datapoints || [],
   };
 }

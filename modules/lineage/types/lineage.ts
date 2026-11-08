@@ -1,3 +1,5 @@
+import type { DataTraceValue } from "./dataTrace";
+
 export const SYSTEMS = [
   "reporting_db",
   "sa_engine",
@@ -231,6 +233,15 @@ export const LINEAGE_EDGE_STATUSES = [
 
 export type LineageEdgeStatus = (typeof LINEAGE_EDGE_STATUSES)[number];
 
+export const LINEAGE_TRACE_ROLES = [
+  "source",
+  "input",
+  "intermediate",
+  "output",
+] as const;
+
+export type LineageTraceRole = (typeof LINEAGE_TRACE_ROLES)[number];
+
 /** A column discovered while tracing a system's tables. */
 export type LineageAttribute = {
   id: string;
@@ -239,6 +250,15 @@ export type LineageAttribute = {
   transformation: string;
   status: string;
   sourceSystemId?: string;
+  /** Data-trace fields populated when the response carries a value trace. */
+  traced?: boolean;
+  value?: DataTraceValue;
+  valueSource?: string;
+  recordKey?: string;
+  traceRole?: LineageTraceRole;
+  hop?: string;
+  traceStatus?: string;
+  isReportedDatapoint?: boolean;
 };
 
 export type LineageTable = {
@@ -278,6 +298,14 @@ export type LineageJoinCondition = {
   operator: string;
 };
 
+export type LineageEdgeTrace = {
+  hop: string;
+  inputs: DataTraceValue[];
+  output: DataTraceValue;
+  status: string;
+  aggregation?: string;
+};
+
 export type LineageEdge = {
   id: string;
   kind: "attribute" | "table";
@@ -287,10 +315,12 @@ export type LineageEdge = {
   description?: string;
   status: LineageEdgeStatus;
   joinConditions?: LineageJoinCondition[];
+  /** Marks the edge as part of the traced path for the reported datapoint. */
+  traced?: boolean;
+  trace?: LineageEdgeTrace;
 };
 
-/**
- * A system referenced by lineage that is not itself included in the graph
+/** One system referenced by lineage that is not itself included in the graph
  * response, either because it is not connected or its metadata is unavailable.
  * The frontend renders these as "Please connect" placeholders.
  */
@@ -302,6 +332,70 @@ export type LineageDependency = {
   message: string;
 };
 
+export type LineageTraceFocus = {
+  systemId: string;
+  tableId: string | null;
+  attributeId: string | null;
+};
+
+export type LineageTraceInput = {
+  systemId: string;
+  tableId: string;
+  attributeId: string;
+  label: string;
+  value: DataTraceValue;
+};
+
+export type LineageTraceHop = {
+  hop: string;
+  systemId: string;
+  tableId: string;
+  attributeId: string;
+  recordKey: string | null;
+  transformation: string;
+  inputs: LineageTraceInput[];
+  output: DataTraceValue;
+  status: string;
+  reason: string | null;
+};
+
+export type LineageTraceHeader = {
+  report: string;
+  bank: string | null;
+  date: string | null;
+  datapoint: string;
+  row: number | null;
+  column: string;
+  value: DataTraceValue;
+  page: number | null;
+  unit: string | null;
+  section: string | null;
+  rowKey: string | null;
+};
+
+export type LineageTraceReconciliation = {
+  reportedValue: DataTraceValue;
+  calculatedValue: DataTraceValue;
+  variance: number | null;
+  tolerance: number;
+  result: string;
+};
+
+/** Data-level trace bundled with the lineage graph for a reported datapoint. */
+export type LineageDataTrace = {
+  id: string;
+  type: string;
+  datapointId: string;
+  status: string;
+  truncated: boolean;
+  nextSource: Record<string, unknown> | null;
+  header: LineageTraceHeader;
+  focus: LineageTraceFocus;
+  hops: LineageTraceHop[];
+  tracedEdgeIds: string[];
+  reconciliation: LineageTraceReconciliation;
+};
+
 /** The full lineage graph returned by GET /api/lineage/graph. */
 export type LineageData = {
   version: string;
@@ -309,9 +403,19 @@ export type LineageData = {
     rootSystemId: string;
     generatedAt: string;
     layout: string;
+    reportName?: string;
+    reportDate?: string;
+    sourceObject?: string;
+    targetSystem?: string;
+    systemsConnected?: number;
+    systemsOfRecordReached?: number;
+    branchOutstanding?: number;
+    metadataStatus?: MetadataStatus;
+    traceId?: string;
   };
   systems: LineageSystem[];
   tables: LineageTable[];
   lineageEdges: LineageEdge[];
   dependencies: LineageDependency[];
+  trace?: LineageDataTrace;
 };

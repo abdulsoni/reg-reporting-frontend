@@ -7,11 +7,33 @@ import { RegulatoryReportPanel } from "../components/RegulatoryReportPanel";
 import { DataPointPanel } from "../components/DataPointPanel";
 import { SourceSystemPanel } from "../components/SourceSystemPanel";
 import { LineageHeader } from "../components/LineageHeader";
+import { useReports } from "../context/ReportContext";
 
 export function LineagePage() {
   const router = useRouter();
 
+  const { selectedDatapoint } = useReports();
+
   const [mode, setMode] = useState<"reverse" | "forward">("reverse");
+
+  /*
+   * When a datapoint cell has been selected, connecting a source
+   * system continues into the data-level trace. Without a cell
+   * selection, the existing system-level trace is opened instead.
+   */
+  const handleConnect = () => {
+    if (selectedDatapoint) {
+      const params = new URLSearchParams({
+        report_name: selectedDatapoint.report_name,
+        datapoint_id: selectedDatapoint.datapoint_id,
+      });
+
+      router.push(`/lineage/data-lineage?${params.toString()}`);
+      return;
+    }
+
+    router.push("/lineage/trace-progress");
+  };
 
   return (
     <div className="min-h-screen bg-[#f4f2ed]">
@@ -62,7 +84,7 @@ export function LineagePage() {
             <RegulatoryReportPanel />
             <DataPointPanel />
             <SourceSystemPanel
-              onConnect={() => router.push("/lineage/trace-progress")}
+              onConnect={handleConnect}
               hideTitle={false}
             />
         </div>

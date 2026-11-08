@@ -9,6 +9,7 @@ import {
 
 import {
   RegulatoryReport,
+  ReportDatapoint,
 } from "../types/report";
 
 import {
@@ -26,8 +27,16 @@ interface ReportContextValue {
   | RegulatoryReport
   | null;
 
+  selectedDatapoint:
+  | ReportDatapoint
+  | null;
+
   setSelectedReportId: (
     reportId: string
+  ) => void;
+
+  setSelectedDatapoint: (
+    datapoint: ReportDatapoint | null
   ) => void;
 
   addReport: (
@@ -67,10 +76,25 @@ export function ReportProvider({
 
   const [
     selectedReportId,
-    setSelectedReportId
+    setSelectedReportIdState
   ] = useState<string | null>(
     null
   );
+
+  const [
+    selectedDatapoint,
+    setSelectedDatapoint
+  ] = useState<ReportDatapoint | null>(
+    null
+  );
+
+
+  const setSelectedReportId = (
+    reportId: string
+  ) => {
+    setSelectedReportIdState(reportId);
+    setSelectedDatapoint(null);
+  };
 
 
   useEffect(() => {
@@ -86,7 +110,7 @@ export function ReportProvider({
       storedReports.length > 0
     ) {
 
-      setSelectedReportId(
+      setSelectedReportIdState(
         storedReports[0].id
       );
 
@@ -108,10 +132,14 @@ export function ReportProvider({
 
     // Automatically select
     // the newly uploaded report.
+    // A new report invalidates the
+    // datapoint selection of the old one.
 
-    setSelectedReportId(
+    setSelectedReportIdState(
       report.id
     );
+
+    setSelectedDatapoint(null);
   };
 
 
@@ -143,7 +171,11 @@ export function ReportProvider({
 
         selectedReport,
 
+        selectedDatapoint,
+
         setSelectedReportId,
+
+        setSelectedDatapoint,
 
         addReport,
 

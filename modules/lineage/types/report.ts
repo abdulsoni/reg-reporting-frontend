@@ -43,9 +43,35 @@ export interface ExtractedPage {
   text: string;
 }
 
+/**
+ * One cell extracted from the report table. The identifier is
+ * `<row_key>.<column>`, which is the value POST /data-lineage/trace expects.
+ */
+export interface ReportDatapoint {
+  datapoint_id: string;
+  row_key: string;
+  row_key_column: string;
+  row: number;
+  column: string;
+  label: string;
+  value: string | number | null;
+  page: number | null;
+  section: string | null;
+  unit: string | null;
+  report_name: string;
+}
+
 export interface UploadedReportResponse {
   pages: ExtractedPage[];
   tables: ExtractedTable[];
+  report?: {
+    reportName?: string;
+    bankName?: string | null;
+    reportDate?: string | null;
+    datapoints?: ReportDatapoint[];
+  };
+  datapointCount?: number;
+  datapointError?: string | null;
 }
 
 export interface RegulatoryReport {
@@ -66,4 +92,7 @@ export interface RegulatoryReport {
   pages: ExtractedPage[];
 
   tables: ExtractedTable[];
+
+  /** Cells extracted from the uploaded PDF, when the backend provides them. */
+  datapoints?: ReportDatapoint[];
 }

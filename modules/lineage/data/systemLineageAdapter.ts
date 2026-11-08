@@ -10,8 +10,10 @@ import type {
   LineageEndpoint,
   LineageSystem,
   LineageTable,
+  LineageTraceRole,
   MetadataStatus,
 } from "../types/lineage";
+import type { DataTraceValue } from "../types/dataTrace";
 
 export type SystemData = {
   label: string;
@@ -64,6 +66,14 @@ export type AttributeData = {
   highlighted?: boolean;
   isTraceTarget?: boolean;
   dimmed?: boolean;
+  traced?: boolean;
+  value?: DataTraceValue;
+  valueSource?: string;
+  recordKey?: string;
+  traceRole?: LineageTraceRole;
+  hop?: string;
+  traceStatus?: string;
+  isReportedDatapoint?: boolean;
 };
 
 export type AttributeFlowNode = Node<AttributeData, "attribute">;
@@ -651,6 +661,14 @@ export function buildSystemGraph(
               highlighted: attributeOnPath,
               isTraceTarget: highlight?.targetNodeId === nodeId,
               dimmed: attributeDimmed,
+              traced: attribute.traced,
+              value: attribute.value,
+              valueSource: attribute.valueSource,
+              recordKey: attribute.recordKey,
+              traceRole: attribute.traceRole,
+              hop: attribute.hop,
+              traceStatus: attribute.traceStatus,
+              isReportedDatapoint: attribute.isReportedDatapoint,
             },
             draggable: false,
           });
@@ -802,6 +820,17 @@ export function buildSystemGraph(
     );
     const dimmed = traceActive && !onPath;
     const stroke = onPath ? "#2563eb" : "#64748b";
+    const tracedEdge = group.edges.find((edge) => edge.traced);
+    const traceHop = tracedEdge?.trace?.hop;
+    const traceOutput = tracedEdge?.trace?.output;
+    const labelParts: string[] = [];
+    if (traceHop) labelParts.push(`hop ${traceHop}`);
+    if (traceOutput !== undefined && traceOutput !== null) {
+      labelParts.push(String(traceOutput));
+    }
+    const label = tracedEdge && labelParts.length > 0
+      ? labelParts.join(" · ")
+      : undefined;
 
     edges.push({
       id: group.edges.length === 1 ? group.edges[0].id : `summary:${key}`,
@@ -810,11 +839,24 @@ export function buildSystemGraph(
       target: group.target.nodeId,
       targetHandle: group.targetHandle,
       type: group.rightSide ? "lineage" : undefined,
+      label,
+      labelStyle: {
+        fill: "#1d4ed8",
+        fontSize: 9,
+        fontFamily: "monospace",
+        fontWeight: 700,
+      },
+      labelBgStyle: { fill: "#ffffff", fillOpacity: 0.95 },
+      labelBgPadding: [4, 2] as [number, number],
+      labelBgBorderRadius: 8,
       data: {
         edges: group.edges,
         sameTable: group.sameTable,
         rightSide: group.rightSide,
         summary: group.edges.length > 1,
+        traced: Boolean(tracedEdge),
+        hop: traceHop,
+        output: traceOutput,
       },
       markerStart: {
         type: MarkerType.ArrowClosed,

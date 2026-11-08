@@ -11,7 +11,7 @@ import {
 
 
 
-import { SourceSystemPanel } from "./SourceSystemPanel";
+import { NextSourceConnectPanel } from "./NextSourceConnectPanel";
 import { useReports } from "../context/ReportContext";
 import { getLatestReportName } from "../services/reportStorage";
 import { ReverseLineageResponse } from "../types/trace";
@@ -889,16 +889,7 @@ export function TraceProgressPanel() {
   };
 
   const renderNextSourcePanel = () => (
-    <div className="panel flex flex-col p-5">
-      <h2 className="pb-2 text-[10px] font-bold uppercase tracking-wider text-slate-500">
-        Next source identification
-      </h2>
-
-      <SourceSystemPanel
-        onConnect={handleConnectNextSource}
-        hideTitle={true}
-      />
-    </div>
+    <NextSourceConnectPanel onConnect={handleConnectNextSource} />
   );
 
   console.log(
