@@ -69,14 +69,14 @@ export default function ValueReconciliation({
   ];
 
   return (
-    <section className="rounded-xl border border-blue-100 bg-white p-3 shadow-sm">
+    <section className="panel p-4">
       <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-blue-200 bg-blue-50 text-blue-700">
-          <Calculator size={21} />
+        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
+          <Calculator size={20} />
         </span>
 
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-bold text-[#102d55]">
+          <h2 className="text-sm font-bold text-ink">
             Value Reconciliation
           </h2>
 
@@ -91,21 +91,21 @@ export default function ValueReconciliation({
             </p>
           )}
 
-          <div className="mt-2 grid gap-3 rounded-lg border border-blue-100 bg-blue-50/40 p-2.5 sm:grid-cols-2 xl:grid-cols-5">
+          <div className="mt-2 grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 sm:grid-cols-2 xl:grid-cols-5">
             {items.map((item) => (
               <div
                 key={item.label}
-                className="border-r border-blue-100 px-2 last:border-0"
+                className="border-r border-slate-200 px-2 last:border-0"
               >
-                <p className="text-[10px] text-[#173b70]">
+                <p className="text-[10px] text-slate-500">
                   {item.label}
                 </p>
 
-                <p className="mt-1 text-sm font-bold tabular-nums text-[#102d55]">
+                <p className="mt-1 text-sm font-bold tabular-nums text-ink">
                   {item.value}
                 </p>
 
-                <p className="text-[10px] text-slate-500">
+                <p className="text-[10px] text-slate-400">
                   {item.unit}
                 </p>
               </div>

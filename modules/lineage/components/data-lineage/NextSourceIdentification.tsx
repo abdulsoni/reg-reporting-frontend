@@ -27,15 +27,15 @@ export default function NextSourceIdentification({
     "Unknown source";
 
   return (
-    <div className="mx-2 mb-2 border-t border-blue-100 bg-blue-50/70 px-3 py-3">
+    <div className="border-t border-slate-200 bg-slate-50/70 px-4 py-4">
       <div className="grid gap-3 lg:grid-cols-[minmax(280px,1.7fr)_0.75fr_1.25fr_1fr_0.8fr_auto] lg:items-center">
         <div className="flex items-center gap-3">
-          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-blue-100 text-blue-600">
-            <Search size={20} />
+          <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full border border-slate-200 bg-white text-slate-500 shadow-soft">
+            <Search size={18} />
           </span>
 
           <div>
-            <h3 className="text-xs font-bold text-[#123866]">
+            <h3 className="text-xs font-bold text-ink">
               Next source identification
             </h3>
 
@@ -46,34 +46,34 @@ export default function NextSourceIdentification({
           </div>
         </div>
 
-        <div className="border-l border-blue-200 pl-3">
+        <div className="border-l border-slate-200 pl-3">
           <p className="text-[10px] text-slate-500">Source system</p>
 
-          <p className="mt-1 text-[11px] font-semibold">{system}</p>
+          <p className="mt-1 text-[11px] font-semibold text-ink">{system}</p>
         </div>
 
-        <div className="border-l border-blue-200 pl-3">
+        <div className="border-l border-slate-200 pl-3">
           <p className="text-[10px] text-slate-500">
             Last known table / attribute
           </p>
 
-          <p className="mt-1 text-[11px] font-semibold">
+          <p className="mt-1 text-[11px] font-semibold text-ink">
             {nextSource.last_table ?? "—"} /{" "}
             {nextSource.last_attribute ?? "—"}
           </p>
         </div>
 
-        <div className="border-l border-blue-200 pl-3">
+        <div className="border-l border-slate-200 pl-3">
           <p className="text-[10px] text-slate-500">Join key</p>
 
-          <p className="mt-1 font-mono text-[11px] font-semibold">
+          <p className="mt-1 font-mono text-[11px] font-semibold text-ink">
             {nextSource.join_key ?? "—"}
             {" = "}
             {formatTraceValue(nextSource.join_value)}
           </p>
         </div>
 
-        <div className="border-l border-blue-200 pl-3">
+        <div className="border-l border-slate-200 pl-3">
           <p className="text-[10px] text-slate-500">
             Connection status
           </p>
@@ -86,7 +86,7 @@ export default function NextSourceIdentification({
         <button
           type="button"
           onClick={() => onIdentify(system)}
-          className="inline-flex items-center justify-center gap-2 rounded-lg bg-blue-600 px-3 py-2.5 text-[11px] font-semibold text-white shadow-sm hover:bg-blue-700"
+          className="inline-flex items-center justify-center gap-2 rounded-lg bg-navy px-3 py-2.5 text-[11px] font-semibold text-white shadow-soft hover:bg-[#173c5f]"
         >
           <Search size={14} />
           Connect source
