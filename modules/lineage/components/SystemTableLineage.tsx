@@ -1,8 +1,10 @@
 "use client";
 
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Bot } from "lucide-react";
 
 import DataTraceSummary from "./DataTraceSummary";
+import LineageAssistantPanel from "./LineageAssistantPanel";
 import LineageSearch from "./LineageSearch";
 import SystemLineageGraph from "./SystemLineageGraph";
 import { useLineageData } from "../hooks/useLineageData";
@@ -67,6 +69,34 @@ export function SystemLineageView({
     entry: AttributeSearchEntry;
     trace: UpstreamTrace;
   } | null>(initialTrace);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const assistantButtonRef = useRef<HTMLButtonElement | null>(null);
+  const assistantPanelRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!assistantOpen) return;
+
+    function handlePointerDown(event: PointerEvent) {
+      const target = event.target as Node;
+
+      if (assistantPanelRef.current?.contains(target)) return;
+      if (assistantButtonRef.current?.contains(target)) return;
+
+      setAssistantOpen(false);
+    }
+
+    function handleKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setAssistantOpen(false);
+    }
+
+    document.addEventListener("pointerdown", handlePointerDown);
+    document.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      document.removeEventListener("pointerdown", handlePointerDown);
+      document.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [assistantOpen]);
 
   const toggleSystem = useCallback(
     (systemId: string) => {
@@ -233,11 +263,24 @@ export function SystemLineageView({
             Tracing {activeTrace.entry.attributeName} — clear path
           </button>
         )}
+
+        <button
+          type="button"
+          ref={assistantButtonRef}
+          onClick={() => setAssistantOpen((current) => !current)}
+          className={`ml-auto inline-flex items-center gap-2 rounded-lg px-3 py-2 text-xs font-semibold text-white transition ${
+            assistantOpen ? "bg-slate-800" : "bg-slate-900 hover:bg-slate-800"
+          }`}
+        >
+          <Bot size={16} />
+          {assistantOpen ? "Close Assistant" : "Assistant"}
+        </button>
       </div>
 
       <DataTraceSummary data={data} />
 
-      <section className="panel p-5">
+      {/* LINEAGE GRAPH — full width; the assistant floats above it. */}
+      <section className="panel min-w-0 p-5">
         <SystemLineageGraph
           key={`${scenarioId}:${activeTrace?.entry.key ?? "none"}`}
           data={data}
@@ -250,6 +293,16 @@ export function SystemLineageView({
           onClearHighlight={clearSearchTrace}
         />
       </section>
+
+      {/* FLOATING ASSISTANT (bottom-right overlay) */}
+      {assistantOpen && (
+        <LineageAssistantPanel
+          data={data}
+          activeTrace={activeTrace}
+          onClose={() => setAssistantOpen(false)}
+          panelRef={assistantPanelRef}
+        />
+      )}
     </div>
   );
 }
