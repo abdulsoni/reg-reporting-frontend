@@ -69,68 +69,71 @@ export default function ValueReconciliation({
   ];
 
   return (
-    <section className="panel p-4">
-      <div className="flex items-start gap-3">
-        <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
-          <Calculator size={20} />
-        </span>
+    <section className="panel p-4 lg:p-5">
+      {/* Row 1: icon + title on the left, result badge on the right. */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="flex min-w-0 flex-1 basis-[280px] items-start gap-3">
+          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg border border-slate-200 bg-slate-50 text-slate-600">
+            <Calculator size={20} />
+          </span>
 
-        <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-bold text-ink">
-            Value Reconciliation
-          </h2>
+          <div className="min-w-0">
+            <h2 className="text-sm font-bold text-ink">
+              Value Reconciliation
+            </h2>
 
-          <p className="mt-1 text-[11px] text-slate-500">
-            Reconcile the value from contributing sources with the
-            calculated value
-          </p>
-
-          {context && (
-            <p className="mt-0.5 font-mono text-[10px] text-slate-400">
-              {context}
+            <p className="mt-1 text-[11px] text-slate-500">
+              Reconcile the value from contributing sources with the
+              calculated value
             </p>
-          )}
 
-          <div className="mt-2 grid gap-3 rounded-lg border border-slate-200 bg-slate-50/60 p-2.5 sm:grid-cols-2 xl:grid-cols-5">
-            {items.map((item) => (
-              <div
-                key={item.label}
-                className="border-r border-slate-200 px-2 last:border-0"
-              >
-                <p className="text-[10px] text-slate-500">
-                  {item.label}
-                </p>
-
-                <p className="mt-1 text-sm font-bold tabular-nums text-ink">
-                  {item.value}
-                </p>
-
-                <p className="text-[10px] text-slate-400">
-                  {item.unit}
-                </p>
-              </div>
-            ))}
-
-            <div className="flex items-center justify-center gap-2">
-              <ResultIcon
-                size={24}
-                className={
-                  isMatch
-                    ? "text-emerald-500"
-                    : isMismatch
-                      ? "text-rose-500"
-                      : "text-amber-500"
-                }
-              />
-
-              <span
-                className={`rounded-full px-3 py-1.5 text-sm font-bold ${resultStyle}`}
-              >
-                {result}
-              </span>
-            </div>
+            {context && (
+              <p className="mt-0.5 break-all font-mono text-[10px] text-slate-400">
+                {context}
+              </p>
+            )}
           </div>
         </div>
+
+        <div className="ml-auto flex shrink-0 items-center gap-2">
+          <ResultIcon
+            size={24}
+            className={
+              isMatch
+                ? "text-emerald-500"
+                : isMismatch
+                  ? "text-rose-500"
+                  : "text-amber-500"
+            }
+          />
+
+          <span
+            className={`whitespace-nowrap rounded-full px-3 py-1.5 text-sm font-bold ${resultStyle}`}
+          >
+            {result}
+          </span>
+        </div>
+      </div>
+
+      {/* Row 2: stats. 2 columns on small screens, 4 from md up. */}
+      <div className="mt-4 grid grid-cols-2 gap-x-4 gap-y-4 rounded-lg border border-slate-200 bg-slate-50/60 p-3 md:grid-cols-4">
+        {items.map((item) => (
+          <div key={item.label} className="min-w-0">
+            <p className="text-[10px] text-slate-500">
+              {item.label}
+            </p>
+
+            <p className="mt-1 break-words text-sm font-bold tabular-nums text-ink">
+              {item.value}
+            </p>
+
+            {item.unit && (
+              <p className="text-[10px] text-slate-400">
+                {item.unit}
+              </p>
+            )}
+          </div>
+        ))}
       </div>
     </section>
   );
