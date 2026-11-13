@@ -513,6 +513,7 @@ export default function SystemLineageGraph({
   expandedSystemIds,
   expandedTableIds,
   highlight,
+  showPathDetails = true,
   onToggleSystem,
   onToggleTable,
   onTraceAttribute,
@@ -522,6 +523,8 @@ export default function SystemLineageGraph({
   expandedSystemIds: string[];
   expandedTableIds: string[];
   highlight?: UpstreamTrace | null;
+  /** Hide the "Lineage path" side panel for the highlighted trace. */
+  showPathDetails?: boolean;
   onToggleSystem: (systemId: string) => void;
   onToggleTable: (tableId: string) => void;
   onTraceAttribute?: (target: LineageEndpoint) => void;
@@ -846,7 +849,11 @@ export default function SystemLineageGraph({
     Math.min(1200, graph.contentHeight + 48)
   );
 
-  const hasDetails = Boolean(selectedEdgeDetails || selectedAttributeDetails || highlight);
+  const hasDetails = Boolean(
+    selectedEdgeDetails ||
+      selectedAttributeDetails ||
+      (highlight && showPathDetails)
+  );
 
   return (
     <div
@@ -1142,7 +1149,7 @@ export default function SystemLineageGraph({
             )}
           </div>
             </SideDetailPanel>
-          ) : highlight ? (
+          ) : highlight && showPathDetails ? (
             <SideDetailPanel
               title="Lineage path"
               onClose={() => onClearHighlight?.()}

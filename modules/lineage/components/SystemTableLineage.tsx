@@ -39,9 +39,18 @@ const SCENARIO_LABELS: Record<ScenarioId, string> = {
 export function SystemLineageView({
   data,
   loading,
+  embedded = false,
+  showTraceSummary = true,
+  showPathDetails = true,
 }: {
   data: LineageData;
   loading?: boolean;
+  /** Render inside an existing panel (e.g. System Lineage Details). */
+  embedded?: boolean;
+  /** Hide the data-trace summary card (and its reconciliation block). */
+  showTraceSummary?: boolean;
+  /** Hide the "Lineage path" side panel when a trace is highlighted. */
+  showPathDetails?: boolean;
 }) {
   /*
    * When the response carries a data-level trace, open the systems and tables
@@ -235,21 +244,23 @@ export function SystemLineageView({
   );
 
   return (
-    <div className="space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2 className="text-lg font-bold tracking-tight text-ink sm:text-xl">
-            System-level lineage
-          </h2>
+    <div className={embedded ? "space-y-4" : "space-y-6"}>
+      {!embedded && (
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div>
+            <h2 className="text-lg font-bold tracking-tight text-ink sm:text-xl">
+              System-level lineage
+            </h2>
 
-          <p className="mt-1 text-xs text-slate-500">
-            Click a database to expand its tables, then click a table to expand
-            its columns.
-          </p>
+            <p className="mt-1 text-xs text-slate-500">
+              Click a database to expand its tables, then click a table to expand
+              its columns.
+            </p>
+          </div>
+
+          {/* {scenarioPicker} */}
         </div>
-
-        {/* {scenarioPicker} */}
-      </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <LineageSearch data={data} onSelect={handleSearchSelect} />
@@ -277,16 +288,17 @@ export function SystemLineageView({
         </button>
       </div>
 
-      <DataTraceSummary data={data} />
+      {showTraceSummary && <DataTraceSummary data={data} />}
 
       {/* LINEAGE GRAPH — full width; the assistant floats above it. */}
-      <section className="panel min-w-0 p-5">
+      <section className={embedded ? "min-w-0" : "panel min-w-0 p-5"}>
         <SystemLineageGraph
           key={`${scenarioId}:${activeTrace?.entry.key ?? "none"}`}
           data={data}
           expandedSystemIds={expandedSystems}
           expandedTableIds={expandedTables}
           highlight={activeTrace?.trace ?? null}
+          showPathDetails={showPathDetails}
           onToggleSystem={toggleSystem}
           onToggleTable={toggleTable}
           onTraceAttribute={handleAttributeTrace}
