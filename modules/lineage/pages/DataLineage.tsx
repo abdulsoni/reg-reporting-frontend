@@ -10,10 +10,9 @@ import LineageDetailsTable from "../components/data-lineage/LineageDetailsTable"
 import NextSourceIdentification from "../components/data-lineage/NextSourceIdentification";
 import SelectedDatapointCard from "../components/data-lineage/SelectedDatapointCard";
 import ValueReconciliation from "../components/data-lineage/ValueReconciliation";
+import EmbeddedGraphPanel from "../components/EmbeddedGraphPanel";
 import { NextSourceConnectPanel } from "../components/NextSourceConnectPanel";
-import { SystemLineageView } from "../components/SystemTableLineage";
 import { useReports } from "../context/ReportContext";
-import { useVisualGraphData } from "../hooks/useVisualGraphData";
 import { getDataTrace } from "../services/lineageApi";
 import type { DataTraceResponse } from "../types/dataTrace";
 import {
@@ -147,15 +146,6 @@ export default function DataLineagePage({
 
   const trace = isCurrentRequest ? result.trace : null;
 
-  const {
-    data: graphData,
-    loading: graphLoading,
-    error: graphError,
-  } = useVisualGraphData(
-    showGraph ? trace?.report_name ?? null : null,
-    showGraph ? trace?.datapoint_id ?? null : null
-  );
-
   const error = isCurrentRequest ? result.error : null;
 
   const loading = requestKey !== null && !isCurrentRequest;
@@ -260,36 +250,6 @@ export default function DataLineagePage({
     setShowNextSourceConnect(false);
     setReloadKey((value) => value + 1);
   };
-
-  /*
-   * "View Lineage Graph" swaps the details table for the embedded system
-   * lineage view, using the same visual-graph response as the evidence page.
-   */
-  const graphContent = showGraph ? (
-    graphLoading ? (
-      <div className="flex items-center justify-center py-16">
-        <div className="flex items-center gap-2 text-[11px] text-slate-500">
-          <Loader2 size={15} className="animate-spin" />
-          Loading lineage graph...
-        </div>
-      </div>
-    ) : graphError ? (
-      <div className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-4 text-[11px] text-rose-700">
-        <p className="font-semibold">
-          Could not load the lineage graph.
-        </p>
-        <p className="mt-1">{graphError}</p>
-      </div>
-    ) : graphData ? (
-      <SystemLineageView
-        data={graphData}
-        loading={graphLoading}
-        embedded
-        showTraceSummary={false}
-        showPathDetails={false}
-      />
-    ) : null
-  ) : null;
 
   return (
     <div className="min-h-screen bg-[#f4f2ed] text-ink">
@@ -397,7 +357,14 @@ export default function DataLineagePage({
               selectedHop={selectedHopId}
               onRowSelect={setSelectedHopId}
               onExport={exportCsv}
-              graphContent={graphContent}
+              graphContent={
+                showGraph ? (
+                  <EmbeddedGraphPanel
+                    reportName={trace.report_name}
+                    datapointId={trace.datapoint_id}
+                  />
+                ) : null
+              }
             >
               {trace.next_source && (
                 <NextSourceIdentification
