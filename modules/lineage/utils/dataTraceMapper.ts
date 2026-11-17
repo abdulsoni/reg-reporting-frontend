@@ -10,7 +10,7 @@ export function formatTraceValue(
   value: DataTraceValue | undefined
 ): string {
   if (value === null || value === undefined || value === "") {
-    return "NA";
+    return "";
   }
 
   return String(value);
@@ -133,7 +133,7 @@ function mapHop(
 
     // valuesUsed: inputs.length ? inputs.join("\n") : " ",
 
-    outputValue: formatTraceValue(hop.output),
+    outputValue: hop.output ? formatTraceValue(hop.output): 'NA',
 
     // consumedBy: isReportHop
     //   ? trace.header.report
