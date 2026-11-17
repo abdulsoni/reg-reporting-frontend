@@ -60,6 +60,7 @@ export default function EmbeddedGraphPanel({
       embedded
       showTraceSummary={false}
       showPathDetails={false}
+      showEdgeLabels={false}
     />
   );
 }

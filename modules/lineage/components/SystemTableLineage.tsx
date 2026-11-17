@@ -42,6 +42,7 @@ export function SystemLineageView({
   embedded = false,
   showTraceSummary = true,
   showPathDetails = true,
+  showEdgeLabels = true,
 }: {
   data: LineageData;
   loading?: boolean;
@@ -51,6 +52,8 @@ export function SystemLineageView({
   showTraceSummary?: boolean;
   /** Hide the "Lineage path" side panel when a trace is highlighted. */
   showPathDetails?: boolean;
+  /** Hide the "hop · value" text drawn on top of the graph edges. */
+  showEdgeLabels?: boolean;
 }) {
   /*
    * When the response carries a data-level trace, open the systems and tables
@@ -299,6 +302,7 @@ export function SystemLineageView({
           expandedTableIds={expandedTables}
           highlight={activeTrace?.trace ?? null}
           showPathDetails={showPathDetails}
+          showEdgeLabels={showEdgeLabels}
           onToggleSystem={toggleSystem}
           onToggleTable={toggleTable}
           onTraceAttribute={handleAttributeTrace}

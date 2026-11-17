@@ -9,9 +9,14 @@ export type LineageRow = {
   recordKey: string;
   inputValue: string;
   transformation: string;
-  valuesUsed: string;
+  // valuesUsed: string;
   outputValue: string;
-  consumedBy: string;
+  consumedBy: {
+    system: string;
+    attribute: string;
+    table: string;
+  };
   status: LineageStatus;
   connected: boolean;
+  systemHop: string;
 };

@@ -28,8 +28,10 @@ type Props = {
   trace: DataTraceResponse;
   reportFile?: string;
   showGraph?: boolean;
+  showSystemDetails?: boolean;
   onShowGraph?: () => void;
   onShowTable?: () => void;
+  onShowSystemDetails?: () => void;
 };
 
 const actionBase =
@@ -43,12 +45,14 @@ export default function SelectedDatapointCard({
   trace,
   reportFile,
   showGraph = false,
+  showSystemDetails = false,
   onShowGraph,
   onShowTable,
+  onShowSystemDetails,
 }: Props) {
   const header = trace.header;
 
-  const dataActive = !showGraph;
+  const dataActive = !showGraph && !showSystemDetails;
 
   const params = new URLSearchParams({
     report_name: trace.report_name,
@@ -57,21 +61,15 @@ export default function SelectedDatapointCard({
 
   const dataLineageHref = `/lineage/data-lineage?${params.toString()}`;
 
-  const systemHref = `/lineage/evidence?${new URLSearchParams({
-    report_name: trace.report_name,
-    datapoint_id: trace.datapoint_id,
-    view: "system",
-  }).toString()}`;
-
   const details: Array<[string, string]> = [
     ["Attribute", trace.attribute],
-    ["Row key", header.row_key ?? "—"],
-    ["Row", formatTraceValue(header.row)],
-    ["Column", header.column],
+    // ["Row key", header.row_key ?? "—"],
+    // ["Row", formatTraceValue(header.row)],
+    // ["Column", header.column],
     ["Value", formatTraceValue(header.value)],
-    ["Unit", header.unit ?? "—"],
-    ["Page", formatTraceValue(header.page)],
-    ["Section", header.section ?? "—"],
+    // ["Unit", header.unit ?? "—"],
+    // ["Page", formatTraceValue(header.page)],
+    // ["Section", header.section ?? "—"],
   ];
 
   return (
@@ -121,7 +119,7 @@ export default function SelectedDatapointCard({
             className={dataActive ? actionActive : actionIdle}
             style={actionStyle}
             onClick={() => {
-              if (showGraph) onShowTable?.();
+              if (showGraph || showSystemDetails) onShowTable?.();
             }}
           >
             <GitBranch size={13} />
@@ -139,10 +137,16 @@ export default function SelectedDatapointCard({
             View Lineage Graph
           </button>
 
-          <Link href={systemHref} className={actionIdle} style={actionStyle}>
+          <button
+            type="button"
+            onClick={onShowSystemDetails}
+            aria-pressed={showSystemDetails}
+            className={showSystemDetails ? actionActive : actionIdle}
+            style={actionStyle}
+          >
             <Table2 size={13} />
             View System Details
-          </Link>
+          </button>
         </div>
       </div>
 

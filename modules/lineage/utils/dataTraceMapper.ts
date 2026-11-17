@@ -10,7 +10,7 @@ export function formatTraceValue(
   value: DataTraceValue | undefined
 ): string {
   if (value === null || value === undefined || value === "") {
-    return "—";
+    return "NA";
   }
 
   return String(value);
@@ -127,21 +127,24 @@ function mapHop(
 
     recordKey: hop.record_key ?? "—",
 
-    inputValue: inputs.length ? inputs.join(" + ") : "—",
+    inputValue: inputs.filter(value => value != null && value !== "").join(" , ") || "NA",
 
-    transformation: hop.transformation || "—",
+    transformation: hop.transformation || "NA",
 
-    valuesUsed: inputs.length ? inputs.join("\n") : "—",
+    // valuesUsed: inputs.length ? inputs.join("\n") : " ",
 
     outputValue: formatTraceValue(hop.output),
 
-    consumedBy: isReportHop
-      ? trace.header.report
-      : `${trace.object}.${trace.attribute}`,
+    // consumedBy: isReportHop
+    //   ? trace.header.report
+    //   : `${trace.object}.${trace.attribute}`,
+
+    consumedBy:hop.consumedBy,
 
     status: mapStatus(hop.status),
 
     connected: hop.status.trim().toLowerCase() === "identified",
+    systemHop:hop.systemHop
   };
 }
 

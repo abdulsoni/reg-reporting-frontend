@@ -17,7 +17,9 @@ import {
   MarkerType,
   BaseEdge,
   EdgeLabelRenderer,
+  getBezierPath,
   getSmoothStepPath,
+  useNodes,
   type Edge,
   type EdgeProps,
   type Node,
@@ -45,6 +47,7 @@ import {
   endpointKey,
   type UpstreamTrace,
 } from "../lib/reverseLineage";
+import { layoutSideEdges, pointArrowAtTarget } from "../lib/edgeLayout";
 import { mapTraceToSystemGraphHighlight } from "../lib/systemGraphHighlight";
 import type {
   LineageData,
@@ -329,6 +332,7 @@ function ExpandedLineageEdge(props: EdgeProps) {
     sourcePosition,
     targetPosition,
     markerStart,
+    markerEnd,
     style,
     data,
     label,
@@ -339,11 +343,12 @@ function ExpandedLineageEdge(props: EdgeProps) {
   let labelY = (sourceY + targetY) / 2;
 
   const edgeData = data as
-    | { rightSide?: boolean; sameTable?: boolean }
+    | { rightSide?: boolean; sameTable?: boolean; laneOffset?: number }
     | undefined;
 
   if (edgeData?.rightSide || edgeData?.sameTable) {
-    const laneX = Math.max(sourceX, targetX) + 36;
+    const laneX =
+      Math.max(sourceX, targetX) + (edgeData.laneOffset ?? 36);
     path = `M ${sourceX},${sourceY} L ${laneX},${sourceY} L ${laneX},${targetY} L ${targetX},${targetY}`;
 
     labelX = laneX;
@@ -367,6 +372,7 @@ function ExpandedLineageEdge(props: EdgeProps) {
         id={id}
         path={path}
         markerStart={markerStart}
+        markerEnd={markerEnd}
         style={style}
       />
 
@@ -388,6 +394,138 @@ function ExpandedLineageEdge(props: EdgeProps) {
   );
 }
 
+/**
+ * Default edge for cross-system hops. It keeps the bezier look, but when the
+ * straight source -> target line would run through another database it routes
+ * around the blocking system nodes instead.
+ */
+function CrossSystemEdge(props: EdgeProps) {
+  const {
+    id,
+    source,
+    target,
+    sourceX,
+    sourceY,
+    targetX,
+    targetY,
+    sourcePosition,
+    targetPosition,
+    markerStart,
+    markerEnd,
+    style,
+    label,
+    labelStyle,
+    labelShowBg,
+    labelBgStyle,
+    labelBgPadding,
+    labelBgBorderRadius,
+  } = props;
+
+  const nodes = useNodes();
+
+  let path: string;
+  let labelX = (sourceX + targetX) / 2;
+  let labelY = (sourceY + targetY) / 2;
+
+  const blockers = useMemo(() => {
+    const rootOf = (nodeId: string): string => {
+      let node = nodes.find((item) => item.id === nodeId);
+
+      while (node?.parentId) {
+        node = nodes.find((item) => item.id === node!.parentId);
+      }
+
+      return node?.id ?? nodeId;
+    };
+
+    const own = new Set([rootOf(source), rootOf(target)]);
+
+    return nodes
+      .filter(
+        (node) =>
+          !node.parentId &&
+          !own.has(node.id) &&
+          (node.type === "system" || node.type === "dependency")
+      )
+      .map((node) => ({
+        x: node.position.x,
+        y: node.position.y,
+        width:
+          node.measured?.width ?? Number(node.style?.width ?? 0),
+        height:
+          node.measured?.height ?? Number(node.style?.height ?? 0),
+      }))
+      .filter((rect) => {
+        // Does the straight source-to-target line pass through this node?
+        for (let step = 1; step < 32; step++) {
+          const t = step / 32;
+          const x = sourceX + (targetX - sourceX) * t;
+          const y = sourceY + (targetY - sourceY) * t;
+
+          if (
+            x > rect.x - 8 &&
+            x < rect.x + rect.width + 8 &&
+            y > rect.y - 8 &&
+            y < rect.y + rect.height + 8
+          ) {
+            return true;
+          }
+        }
+
+        return false;
+      });
+  }, [nodes, source, target, sourceX, sourceY, targetX, targetY]);
+
+  if (blockers.length > 0) {
+    // Leave the source, run above or below the blocking systems, then come
+    // back into the target. The vertical runs use the gap beside the nodes.
+    const top = Math.min(...blockers.map((rect) => rect.y)) - 24;
+    const bottom =
+      Math.max(...blockers.map((rect) => rect.y + rect.height)) + 24;
+    const mid = (sourceY + targetY) / 2;
+    const stagger =
+      ([...id].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 5) * 8;
+    const detourY =
+      Math.abs(top - mid) <= Math.abs(bottom - mid)
+        ? top - stagger
+        : bottom + stagger;
+    const direction = targetX >= sourceX ? 1 : -1;
+    const startX = sourceX + 18 * direction;
+    const endX = targetX - 18 * direction;
+
+    path = `M ${sourceX},${sourceY} L ${startX},${sourceY} L ${startX},${detourY} L ${endX},${detourY} L ${endX},${targetY} L ${targetX},${targetY}`;
+    labelX = (sourceX + targetX) / 2;
+    labelY = detourY;
+  } else {
+    [path, labelX, labelY] = getBezierPath({
+      sourceX,
+      sourceY,
+      sourcePosition,
+      targetX,
+      targetY,
+      targetPosition,
+    });
+  }
+
+  return (
+    <BaseEdge
+      id={id}
+      path={path}
+      labelX={labelX}
+      labelY={labelY}
+      label={label}
+      labelStyle={labelStyle}
+      labelShowBg={labelShowBg}
+      labelBgStyle={labelBgStyle}
+      labelBgPadding={labelBgPadding}
+      labelBgBorderRadius={labelBgBorderRadius}
+      markerStart={markerStart}
+      markerEnd={markerEnd}
+      style={style}
+    />
+  );
+}
+
 const nodeTypes = {
   system: SystemNode,
   dependency: DependencyNode,
@@ -397,6 +535,7 @@ const nodeTypes = {
 
 const edgeTypes = {
   lineage: ExpandedLineageEdge,
+  default: CrossSystemEdge,
 };
 
 type DetailPanelProps = {
@@ -518,6 +657,7 @@ export default function SystemLineageGraph({
   onTraceAttribute,
   onClearHighlight,
   showPathDetails = true,
+  showEdgeLabels = true,
 }: {
   data: LineageData;
   expandedSystemIds: string[];
@@ -528,6 +668,8 @@ export default function SystemLineageGraph({
   onTraceAttribute?: (target: LineageEndpoint) => void;
   onClearHighlight?: () => void;
   showPathDetails?: boolean;
+  /** Hide the "hop · value" text drawn on top of the edges. */
+  showEdgeLabels?: boolean;
 }) {
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedAttribute, setSelectedAttribute] =
@@ -609,10 +751,23 @@ export default function SystemLineageGraph({
     });
   }, [graph.nodes, selectedAttribute]);
 
-  const edges = useMemo<Edge[]>(() => {
-    if (!selectedEdgeId) return graph.edges;
+  const baseEdges = useMemo<Edge[]>(
+    () =>
+      layoutSideEdges(
+        graph.nodes,
+        graph.edges
+          .map(pointArrowAtTarget)
+          .map((edge) =>
+            showEdgeLabels ? edge : { ...edge, label: undefined }
+          )
+      ),
+    [graph.nodes, graph.edges, showEdgeLabels]
+  );
 
-    return graph.edges.map((edge) => {
+  const edges = useMemo<Edge[]>(() => {
+    if (!selectedEdgeId) return baseEdges;
+
+    return baseEdges.map((edge) => {
       if (edge.id !== selectedEdgeId) return edge;
 
       return {
@@ -624,7 +779,7 @@ export default function SystemLineageGraph({
           strokeWidth: 3,
           opacity: 1,
         },
-        markerStart: {
+        markerEnd: {
           type: MarkerType.ArrowClosed,
           width: 14,
           height: 14,
@@ -633,7 +788,7 @@ export default function SystemLineageGraph({
         zIndex: 20,
       };
     });
-  }, [graph.edges, selectedEdgeId]);
+  }, [baseEdges, selectedEdgeId]);
 
   const handleNodeClick = useCallback(
     (_: React.MouseEvent, node: Node) => {

@@ -11,6 +11,7 @@ import NextSourceIdentification from "../components/data-lineage/NextSourceIdent
 import SelectedDatapointCard from "../components/data-lineage/SelectedDatapointCard";
 import ValueReconciliation from "../components/data-lineage/ValueReconciliation";
 import EmbeddedGraphPanel from "../components/EmbeddedGraphPanel";
+import SystemDetailsView from "../components/SystemDetailsView";
 import { NextSourceConnectPanel } from "../components/NextSourceConnectPanel";
 import { useReports } from "../context/ReportContext";
 import { getDataTrace } from "../services/lineageApi";
@@ -66,6 +67,7 @@ export default function DataLineagePage({
     null
   );
   const [showGraph, setShowGraph] = useState(false);
+  const [showSystem, setShowSystem] = useState(false);
 
   const requestKey =
     effectiveReportName && effectiveDatapointId
@@ -195,7 +197,7 @@ export default function DataLineagePage({
       "System",
       "Table",
       "Attribute",
-      "Record / Join Key",
+      // "Record / Join Key",
       "Input Value(s)",
       "Input Attributes",
       "Transformation",
@@ -340,8 +342,19 @@ export default function DataLineagePage({
               trace={trace}
               reportFile={reportFile}
               showGraph={showGraph}
-              onShowGraph={() => setShowGraph(true)}
-              onShowTable={() => setShowGraph(false)}
+              showSystemDetails={showSystem}
+              onShowGraph={() => {
+                setShowGraph(true);
+                setShowSystem(false);
+              }}
+              onShowTable={() => {
+                setShowGraph(false);
+                setShowSystem(false);
+              }}
+              onShowSystemDetails={() => {
+                setShowSystem(true);
+                setShowGraph(false);
+              }}
             />
 
             {trace.truncated && (
@@ -352,13 +365,25 @@ export default function DataLineagePage({
             )}
 
             <LineageDetailsTable
-              title={showGraph ? "Lineage Graph" : "Data Lineage"}
+              title={
+                showSystem
+                  ? "System Details"
+                  : showGraph
+                    ? "Lineage Graph"
+                    : "Data Lineage"
+              }
               rows={rows}
               selectedHop={selectedHopId}
               onRowSelect={setSelectedHopId}
               onExport={exportCsv}
               graphContent={
-                showGraph ? (
+                showSystem ? (
+                  <SystemDetailsView
+                    rows={rows}
+                    trace={trace}
+                    reconciliation={overallReconciliation}
+                  />
+                ) : showGraph ? (
                   <EmbeddedGraphPanel
                     reportName={trace.report_name}
                     datapointId={trace.datapoint_id}
@@ -380,13 +405,13 @@ export default function DataLineagePage({
               />
             )}
 
-            {displayedReconciliation && (
+            {/* {displayedReconciliation && (
               <ValueReconciliation
                 reconciliation={displayedReconciliation}
                 unit={trace.unit ?? trace.header.unit}
                 context={reconciliationContext}
               />
-            )}
+            )} */}
           </>
         )}
       </main>

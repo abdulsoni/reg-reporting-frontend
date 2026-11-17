@@ -101,10 +101,10 @@ export default function LineageDetailsTable({
                   "System",
                   "Table",
                   "Attribute",
-                  "Record / Join Key",
+                  // "Record / Join Key",
                   "Input Value(s)",
                   "Transformation",
-                  "Values Used",
+                  // "Values Used",
                   "Output Value",
                   "Consumed By",
                   "Status",
@@ -135,7 +135,7 @@ export default function LineageDetailsTable({
                     className={`border-b border-slate-100 align-middle text-[11px] transition last:border-0 ${onRowSelect ? "cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-slate-400" : ""} ${isSelected ? "bg-slate-100 ring-1 ring-inset ring-slate-300" : "hover:bg-slate-50"}`}
                   >
                     <td className="px-3 py-2.5 font-bold text-ink">
-                      {row.hop}
+                      {row.systemHop}
                     </td>
                     <td className="px-3 py-2.5">
                       <div className="flex min-w-[140px] items-center gap-2">
@@ -165,9 +165,9 @@ export default function LineageDetailsTable({
                     <td className="px-3 py-2.5 text-slate-700">
                       {row.attribute}
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-[10px] text-slate-600">
+                    {/* <td className="px-3 py-2.5 font-mono text-[10px] text-slate-600">
                       {row.recordKey}
-                    </td>
+                    </td> */}
                     <td className="px-3 py-2.5 font-semibold tabular-nums text-ink">
                       {row.inputValue}
                     </td>
@@ -176,16 +176,16 @@ export default function LineageDetailsTable({
                         {row.transformation}
                       </div>
                     </td>
-                    <td className="px-3 py-2.5">
+                    {/* <td className="px-3 py-2.5">
                       <div className="min-w-[72px] whitespace-pre-wrap rounded-lg border border-slate-200 bg-slate-50 px-2 py-1 text-center font-semibold tabular-nums text-slate-700">
                         {row.valuesUsed}
                       </div>
-                    </td>
+                    </td> */}
                     <td className="px-3 py-2.5 font-bold tabular-nums text-ink">
                       {row.outputValue}
                     </td>
                     <td className="px-3 py-2.5 whitespace-pre-wrap text-slate-600">
-                      {row.consumedBy}
+                      {row.consumedBy ? `${row.consumedBy?.system} -> ${row.consumedBy?.table} -> ${row.consumedBy?.attribute}` : 'NA'}
                     </td>
                     <td className="px-3 py-2.5">
                       <Status value={row.status} />

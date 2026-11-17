@@ -42,6 +42,7 @@ export type LineageHop = {
   source_from: string | null;
   consumed_by: string | null;
   status: HopStatus;
+  systemHop:string | null;
 };
 
 export type NextSource = {

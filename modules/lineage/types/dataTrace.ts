@@ -35,6 +35,12 @@ export interface DataTraceHop {
   verification?: string;
   status: string;
   reason: string | null;
+  systemHop: string;
+  consumedBy: {
+    system: string;
+    attribute: string;
+    table: string;
+  };
 }
 
 export interface DataTraceNextSource {
