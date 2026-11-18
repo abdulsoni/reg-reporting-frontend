@@ -27,7 +27,7 @@ import type {
 } from "../types/dataTrace";
 import { formatTraceValue } from "../utils/dataTraceMapper";
 
-type Mode = "system" | "data";
+export type Mode = "system" | "data";
 
 type Palette = { border: string; bg: string; text: string };
 
@@ -382,6 +382,12 @@ function buildLayout(
       type: "root",
       position: positions.get(ROOT_ID) ?? { x: 0, y: 0 },
       style: { width: NODE_W, height },
+      /*
+       * React Flow only marks the graph as initialized from `measured`, so
+       * seed it here. Without it the header export stays disabled even though
+       * the nodes are already on screen.
+       */
+      measured: { width: NODE_W, height },
       data: { trace, reconciliation, mode } satisfies RootData,
       draggable: false,
     },
@@ -390,6 +396,7 @@ function buildLayout(
       type: "hop",
       position: positions.get(row.hop) ?? { x: 0, y: 0 },
       style: { width: NODE_W, height },
+      measured: { width: NODE_W, height },
       data: {
         row,
         mode,
@@ -433,6 +440,8 @@ type Props = {
   rows: LineageRow[];
   trace: DataTraceResponse;
   reconciliation?: DataTraceReconciliation | null;
+  /** Lets the parent name exported files after the active mode. */
+  onModeChange?: (mode: Mode) => void;
 };
 
 /**
@@ -444,8 +453,14 @@ export default function SystemDetailsView({
   rows,
   trace,
   reconciliation,
+  onModeChange,
 }: Props) {
-  const [mode, setMode] = useState<Mode>("system");
+  const [mode, setModeState] = useState<Mode>("system");
+
+  const setMode = (next: Mode) => {
+    setModeState(next);
+    onModeChange?.(next);
+  };
 
   const layout = useMemo(
     () => buildLayout(rows, trace, reconciliation, mode),

@@ -13,7 +13,9 @@ import NextSourceIdentification from "../components/data-lineage/NextSourceIdent
 import SelectedDatapointCard from "../components/data-lineage/SelectedDatapointCard";
 import ValueReconciliation from "../components/data-lineage/ValueReconciliation";
 import EmbeddedGraphPanel from "../components/EmbeddedGraphPanel";
-import SystemDetailsView from "../components/SystemDetailsView";
+import SystemDetailsView, {
+  type Mode as SystemDetailsMode,
+} from "../components/SystemDetailsView";
 import { NextSourceConnectPanel } from "../components/NextSourceConnectPanel";
 import { useReports } from "../context/ReportContext";
 import { getDataTrace } from "../services/lineageApi";
@@ -70,6 +72,8 @@ export default function DataLineagePage({
   );
   const [showGraph, setShowGraph] = useState(false);
   const [showSystem, setShowSystem] = useState(false);
+  const [systemMode, setSystemMode] =
+    useState<SystemDetailsMode>("system");
 
   const requestKey =
     effectiveReportName && effectiveDatapointId
@@ -354,6 +358,8 @@ export default function DataLineagePage({
                 setShowSystem(false);
               }}
               onShowSystemDetails={() => {
+                // The view always opens in system mode.
+                setSystemMode("system");
                 setShowSystem(true);
                 setShowGraph(false);
               }}
@@ -382,7 +388,11 @@ export default function DataLineagePage({
                 headerAction={
                   showGraph || showSystem ? (
                     <LineageGraphExportMenu
-                      fileName={trace.datapoint_id}
+                      fileName={
+                        showSystem
+                          ? `${trace.datapoint_id}-${systemMode}-view`
+                          : trace.datapoint_id
+                      }
                     />
                   ) : undefined
                 }
@@ -392,6 +402,7 @@ export default function DataLineagePage({
                       rows={rows}
                       trace={trace}
                       reconciliation={overallReconciliation}
+                      onModeChange={setSystemMode}
                     />
                   ) : showGraph ? (
                     <EmbeddedGraphPanel
