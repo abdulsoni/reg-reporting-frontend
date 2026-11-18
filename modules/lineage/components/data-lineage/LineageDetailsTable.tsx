@@ -5,6 +5,7 @@ import {
   Clock3,
   CircleAlert,
   Download,
+  Loader2,
 } from "lucide-react";
 import type { KeyboardEvent, ReactNode } from "react";
 import type { LineageRow } from "./types";
@@ -52,6 +53,10 @@ type Props = {
   /** When provided, rendered in place of the details table. */
   graphContent?: ReactNode | null;
   onExport?: () => void;
+  /** True while the export request is in flight. */
+  exporting?: boolean;
+  /** Inline message shown when the export fails. */
+  exportError?: string | null;
   /** Replaces the default Export button in the header. */
   headerAction?: ReactNode;
 };
@@ -64,6 +69,8 @@ export default function LineageDetailsTable({
   title = "Data Lineage",
   graphContent,
   onExport,
+  exporting = false,
+  exportError = null,
   headerAction,
 }: Props) {
   const handleKeyDown = (
@@ -86,14 +93,28 @@ export default function LineageDetailsTable({
           <button
             type="button"
             onClick={onExport}
+            disabled={exporting}
+            aria-busy={exporting || undefined}
             style={exportStyle}
-            className="ml-auto inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-ink transition hover:bg-slate-50"
+            className="ml-auto inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-ink transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-50"
           >
-            <Download size={13} />
-            Export details
+            {exporting ? (
+              <Loader2 size={13} className="animate-spin" />
+            ) : (
+              <Download size={13} />
+            )}
+            {exporting ? "Exporting…" : "Export details"}
           </button>
         )}
       </div>
+      {exportError ? (
+        <div
+          role="alert"
+          className="border-b border-rose-100 bg-rose-50 px-4 py-2 text-[11px] font-medium text-rose-700"
+        >
+          {exportError}
+        </div>
+      ) : null}
       {graphContent ? (
         <div className="p-4">{graphContent}</div>
       ) : (

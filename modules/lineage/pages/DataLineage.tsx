@@ -19,9 +19,9 @@ import SystemDetailsView, {
 import { NextSourceConnectPanel } from "../components/NextSourceConnectPanel";
 import { useReports } from "../context/ReportContext";
 import { getDataTrace } from "../services/lineageApi";
+import { exportLineageExcel } from "../services/lineageExportService";
 import type { DataTraceResponse } from "../types/dataTrace";
 import {
-  formatTraceValue,
   mapTraceHops,
   normalizeReconciliation,
   reconciliationForHop,
@@ -74,6 +74,10 @@ export default function DataLineagePage({
   const [showSystem, setShowSystem] = useState(false);
   const [systemMode, setSystemMode] =
     useState<SystemDetailsMode>("system");
+  const [exporting, setExporting] = useState(false);
+  const [exportError, setExportError] = useState<string | null>(
+    null
+  );
 
   const requestKey =
     effectiveReportName && effectiveDatapointId
@@ -195,59 +199,26 @@ export default function DataLineagePage({
     )?.fileName ??
     selectedReport?.fileName;
 
-  const exportCsv = () => {
-    if (!trace) return;
+  const handleExport = async () => {
+    if (!trace || exporting) return;
 
-    const headers = [
-      "Hop",
-      "System",
-      "Table",
-      "Attribute",
-      // "Record / Join Key",
-      "Input Value(s)",
-      "Input Attributes",
-      "Transformation",
-      "Output Value",
-      "Status",
-      "Reason",
-    ];
+    setExportError(null);
+    setExporting(true);
 
-    const values = trace.hops.map((hop) => [
-      hop.hop,
-      hop.system,
-      hop.table,
-      hop.attribute,
-      hop.record_key ?? "",
-      hop.inputs.map(formatTraceValue).join(" + "),
-      hop.input_attributes.join(", "),
-      hop.transformation,
-      formatTraceValue(hop.output),
-      hop.status,
-      hop.reason ?? "",
-    ]);
-
-    const csv = [headers, ...values]
-      .map((row) =>
-        row
-          .map(
-            (value) =>
-              `"${String(value).replaceAll('"', '""')}"`
-          )
-          .join(",")
-      )
-      .join("\r\n");
-
-    const link = document.createElement("a");
-
-    link.href = URL.createObjectURL(
-      new Blob([csv], { type: "text/csv;charset=utf-8;" })
-    );
-
-    link.download = `${trace.datapoint_id}.csv`;
-
-    link.click();
-
-    URL.revokeObjectURL(link.href);
+    try {
+      await exportLineageExcel({
+        reportName: trace.report_name,
+        datapointId: trace.datapoint_id,
+      });
+    } catch (cause) {
+      setExportError(
+        cause instanceof Error
+          ? cause.message
+          : "Excel export failed"
+      );
+    } finally {
+      setExporting(false);
+    }
   };
 
   /*
@@ -350,15 +321,18 @@ export default function DataLineagePage({
               showGraph={showGraph}
               showSystemDetails={showSystem}
               onShowGraph={() => {
+                setExportError(null);
                 setShowGraph(true);
                 setShowSystem(false);
               }}
               onShowTable={() => {
+                setExportError(null);
                 setShowGraph(false);
                 setShowSystem(false);
               }}
               onShowSystemDetails={() => {
                 // The view always opens in system mode.
+                setExportError(null);
                 setSystemMode("system");
                 setShowSystem(true);
                 setShowGraph(false);
@@ -384,7 +358,9 @@ export default function DataLineagePage({
                 rows={rows}
                 selectedHop={selectedHopId}
                 onRowSelect={setSelectedHopId}
-                onExport={exportCsv}
+                onExport={handleExport}
+                exporting={exporting}
+                exportError={exportError}
                 headerAction={
                   showGraph || showSystem ? (
                     <LineageGraphExportMenu
