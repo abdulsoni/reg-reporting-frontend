@@ -7,6 +7,7 @@ import {
   useState,
   type ReactNode,
 } from "react";
+import { createPortal } from "react-dom";
 
 import {
   ReactFlow,
@@ -50,9 +51,11 @@ import {
 import { layoutSideEdges, pointArrowAtTarget } from "../lib/edgeLayout";
 import { mapTraceToSystemGraphHighlight } from "../lib/systemGraphHighlight";
 import type {
+  LineageAttribute,
   LineageData,
   LineageEdge,
   LineageEndpoint,
+  LineageTable,
   LineageTraceRole,
 } from "../types/lineage";
 import type { DataTraceValue } from "../types/dataTrace";
@@ -579,6 +582,205 @@ function SideDetailPanel({ title, onClose, children }: DetailPanelProps) {
   );
 }
 
+/** How many relationships to list per direction before collapsing the rest. */
+const HOVER_CARD_LIMIT = 3;
+
+type AttributeHoverCardProps = {
+  data: LineageData;
+  systemLabel: string;
+  table: LineageTable;
+  attribute: LineageAttribute;
+  incoming: LineageEdge[];
+  outgoing: LineageEdge[];
+  /** endpointKey(endpoint) → value recorded for that column in the trace. */
+  values: Map<string, string>;
+  x: number;
+  y: number;
+};
+
+/**
+ * Read-only card shown while the pointer rests on an attribute node. It is
+ * pointer-events-none and rendered in a portal so it never blocks the graph and
+ * closes as soon as the pointer leaves the node.
+ */
+function AttributeHoverCard({
+  data,
+  systemLabel,
+  table,
+  attribute,
+  incoming,
+  outgoing,
+  values,
+  x,
+  y,
+}: AttributeHoverCardProps) {
+  const attributeValue =
+    values.get(
+      endpointKey({
+        systemId: table.systemId,
+        tableId: table.id,
+        attributeId: attribute.id,
+      })
+    ) ?? formatTraceValue(attribute.value);
+  const transformationValue =
+    attributeValue || formatTraceValue(incoming[0]?.trace?.output);
+  const valueStyle = attribute.traceRole
+    ? TRACE_ROLE_STYLES[attribute.traceRole]
+    : "border-slate-200 bg-slate-50 text-slate-700";
+
+  const renderRelationships = (
+    edges: LineageEdge[],
+    direction: "incoming" | "outgoing",
+    emptyLabel: string
+  ) => {
+    if (edges.length === 0) {
+      return (
+        <div className="mt-0.5 text-[10px] text-slate-500">{emptyLabel}</div>
+      );
+    }
+
+    const visible = edges.slice(0, HOVER_CARD_LIMIT);
+    const hidden = edges.length - visible.length;
+
+    return (
+      <>
+        <ul className="mt-0.5 space-y-1">
+          {visible.map((edge) => {
+            const endpoint =
+              direction === "incoming" ? edge.source : edge.target;
+            const tone =
+              direction === "incoming"
+                ? "border-sky-100 bg-sky-50/70 text-sky-800"
+                : "border-emerald-100 bg-emerald-50/70 text-emerald-800";
+            const resolution = resolveEndpoint(endpoint, data);
+            const endpointAttribute =
+              resolution.kind === "resolved" ? resolution.attribute : null;
+            const endpointValue = values.get(endpointKey(endpoint)) ?? "";
+            const endpointValueStyle = endpointAttribute?.traceRole
+              ? TRACE_ROLE_STYLES[endpointAttribute.traceRole]
+              : "border-slate-200 bg-white text-slate-700";
+
+            return (
+              <li
+                key={edge.id}
+                className={`rounded-md border px-2 py-1 ${tone}`}
+              >
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0 break-all font-mono text-[10px] font-semibold">
+                    {formatQualified(endpoint, data, resolution)}
+                  </div>
+
+                  {endpointValue && (
+                    <span
+                      className={`shrink-0 rounded border px-1 py-0.5 font-mono text-[9px] font-bold tabular-nums ${endpointValueStyle}`}
+                    >
+                      {endpointValue}
+                    </span>
+                  )}
+                </div>
+
+                {edge.transformation && (
+                  <div className="mt-0.5 break-words font-mono text-[9px] opacity-80">
+                    {edge.transformation}
+                  </div>
+                )}
+              </li>
+            );
+          })}
+        </ul>
+
+        {hidden > 0 && (
+          <div className="mt-0.5 font-mono text-[9px] text-slate-400">
+            +{hidden} more {direction === "incoming" ? "source" : "target"}
+            {hidden === 1 ? "" : "s"}
+          </div>
+        )}
+      </>
+    );
+  };
+
+  return createPortal(
+    <div
+      role="tooltip"
+      className="pointer-events-none fixed z-50 w-[360px] max-w-[calc(100vw-24px)] rounded-xl border border-slate-200 bg-white p-3 text-left shadow-2xl ring-1 ring-slate-900/5"
+      style={{ left: x, top: y }}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div className="min-w-0">
+          <div className="truncate font-mono text-[10px] font-bold uppercase tracking-wide text-slate-500">
+            {systemLabel}
+          </div>
+          <div className="truncate font-mono text-xs font-bold text-slate-900">
+            {table.name}.{attribute.name}
+          </div>
+        </div>
+
+        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-600">
+          {attribute.dataType}
+        </span>
+      </div>
+
+      <div className="mt-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+          Transformation
+        </div>
+        <div className="mt-0.5 break-words rounded-md bg-slate-50 px-2 py-1.5 font-mono text-[10px] leading-snug text-slate-700">
+          {attribute.transformation ||
+            incoming[0]?.transformation ||
+            "Direct source column — no transformation expression."}
+        </div>
+
+        {transformationValue && (
+          <div className="mt-1 flex items-center justify-end gap-1.5">
+            <span className="font-mono text-[9px] uppercase tracking-wide text-slate-400">
+              value
+            </span>
+            <span className="rounded border border-slate-200 bg-white px-1.5 py-0.5 font-mono text-[10px] font-bold tabular-nums text-slate-700">
+              {transformationValue}
+            </span>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+          Input system
+        </div>
+        {renderRelationships(
+          incoming,
+          "incoming",
+          "Source system — no upstream attribute."
+        )}
+      </div>
+
+      <div className="mt-2">
+        <div className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">
+          Output system
+        </div>
+        {renderRelationships(
+          outgoing,
+          "outgoing",
+          "No downstream consumer."
+        )}
+      </div>
+
+      {attributeValue && (
+        <div className="mt-2 flex items-center justify-between gap-2 rounded-md border border-blue-100 bg-blue-50/60 p-2">
+          <span className="text-[10px] font-semibold uppercase tracking-wide text-blue-700/70">
+            Value
+          </span>
+          <span
+            className={`rounded border px-1.5 py-0.5 font-mono text-[11px] font-bold tabular-nums ${valueStyle}`}
+          >
+            {attributeValue}
+          </span>
+        </div>
+      )}
+    </div>,
+    document.body
+  );
+}
+
 
 function formatEndpoint(
   endpoint: LineageEndpoint,
@@ -674,12 +876,23 @@ export default function SystemLineageGraph({
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedAttribute, setSelectedAttribute] =
     useState<SelectedAttribute | null>(null);
+  const [hoveredAttribute, setHoveredAttribute] =
+    useState<SelectedAttribute | null>(null);
+  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(
+    null
+  );
   const [flow, setFlow] = useState<ReactFlowInstance | null>(null);
+
+  const clearHover = useCallback(() => {
+    setHoveredAttribute(null);
+    setHoverPoint(null);
+  }, []);
 
   const resetSelection = useCallback(() => {
     setSelectedEdgeId(null);
     setSelectedAttribute(null);
-  }, []);
+    clearHover();
+  }, [clearHover]);
 
   const handleToggleSystem = useCallback(
     (systemId: string) => {
@@ -722,6 +935,68 @@ export default function SystemLineageGraph({
       handleToggleTable,
     ]
   );
+
+  /**
+   * Values recorded for individual columns during the data trace. Hop outputs
+   * cover the traced column itself; hop inputs cover every column it read, so
+   * both sides of a relationship get a value even when the metadata attribute
+   * does not carry one.
+   */
+  const endpointValues = useMemo(() => {
+    const values = new Map<string, string>();
+
+    const remember = (
+      endpoint: LineageEndpoint,
+      value: DataTraceValue | undefined
+    ) => {
+      const formatted = formatTraceValue(value);
+      if (!formatted) return;
+
+      const key = endpointKey(endpoint);
+      if (!values.has(key)) values.set(key, formatted);
+    };
+
+    for (const hop of data.trace?.hops ?? []) {
+      remember(
+        {
+          systemId: hop.systemId,
+          tableId: hop.tableId,
+          attributeId: hop.attributeId,
+        },
+        hop.output
+      );
+
+      for (const input of hop.inputs) {
+        remember(
+          {
+            systemId: input.systemId,
+            tableId: input.tableId,
+            attributeId: input.attributeId,
+          },
+          input.value
+        );
+      }
+    }
+
+    for (const table of data.tables) {
+      for (const attribute of table.attributes) {
+        remember(
+          {
+            systemId: table.systemId,
+            tableId: table.id,
+            attributeId: attribute.id,
+          },
+          attribute.value
+        );
+      }
+    }
+
+    for (const edge of data.lineageEdges) {
+      remember(edge.source, edge.trace?.output);
+    }
+
+    return values;
+  }, [data]);
 
   useEffect(() => {
     if (!flow) return;
@@ -816,6 +1091,46 @@ export default function SystemLineageGraph({
     [onTraceAttribute]
   );
 
+  const handleNodeMouseEnter = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      if (node.type !== "attribute") return;
+
+      const nodeData = node.data as AttributeData;
+      const cardWidth = 372;
+      const cardHeight = 420;
+      const margin = 12;
+
+      setHoveredAttribute({
+        systemId: nodeData.systemId,
+        tableId: nodeData.tableId,
+        attributeId: nodeData.attributeId,
+      });
+      setHoverPoint({
+        x: Math.max(
+          margin,
+          Math.min(event.clientX + 18, window.innerWidth - cardWidth - margin)
+        ),
+        y: Math.max(
+          margin,
+          Math.min(
+            event.clientY + 18,
+            window.innerHeight - cardHeight - margin
+          )
+        ),
+      });
+    },
+    []
+  );
+
+  const handleNodeMouseLeave = useCallback(
+    (_: React.MouseEvent, node: Node) => {
+      if (node.type !== "attribute") return;
+
+      clearHover();
+    },
+    [clearHover]
+  );
+
   const selectedEdgeDetails = useMemo(() => {
     if (!selectedEdgeId) return null;
 
@@ -831,37 +1146,75 @@ export default function SystemLineageGraph({
     return { edge, count: payload?.edges?.length ?? 1 };
   }, [data.lineageEdges, graph.edges, selectedEdgeId]);
 
-  const selectedAttributeDetails = useMemo(() => {
-    if (!selectedAttribute) return null;
+  const describeAttribute = useCallback(
+    (target: SelectedAttribute | null) => {
+      if (!target) return null;
 
-    const table = data.tables.find(
-      (item) => item.id === selectedAttribute.tableId
+      const table = data.tables.find((item) => item.id === target.tableId);
+      const attribute = table?.attributes.find(
+        (item) => item.id === target.attributeId
+      );
+
+      if (!table || !attribute) return null;
+
+      return { table, attribute };
+    },
+    [data.tables]
+  );
+
+  const lineageForAttribute = useCallback(
+    (
+      target: SelectedAttribute | null
+    ): { incoming: LineageEdge[]; outgoing: LineageEdge[] } => {
+      if (!target) return { incoming: [], outgoing: [] };
+
+      const matches = (endpoint: LineageEndpoint) =>
+        endpoint.systemId === target.systemId &&
+        endpoint.tableId === target.tableId &&
+        endpoint.attributeId === target.attributeId;
+
+      return {
+        incoming: data.lineageEdges.filter((edge) => matches(edge.target)),
+        outgoing: data.lineageEdges.filter((edge) => matches(edge.source)),
+      };
+    },
+    [data.lineageEdges]
+  );
+
+  const selectedAttributeDetails = useMemo(
+    () => describeAttribute(selectedAttribute),
+    [describeAttribute, selectedAttribute]
+  );
+
+  const attributeLineage = useMemo(
+    () => lineageForAttribute(selectedAttribute),
+    [lineageForAttribute, selectedAttribute]
+  );
+
+  const hoveredAttributeDetails = useMemo(
+    () => describeAttribute(hoveredAttribute),
+    [describeAttribute, hoveredAttribute]
+  );
+
+  const hoveredAttributeLineage = useMemo(
+    () => lineageForAttribute(hoveredAttribute),
+    [lineageForAttribute, hoveredAttribute]
+  );
+
+  /* Hide the card if the hovered node is no longer on the canvas (e.g. its
+   * table was collapsed) without mutating state during render. */
+  const hoveredNodeVisible = useMemo(() => {
+    if (!hoveredAttribute) return false;
+
+    return graph.nodes.some(
+      (node) =>
+        node.type === "attribute" &&
+        (node.data as AttributeData).systemId === hoveredAttribute.systemId &&
+        (node.data as AttributeData).tableId === hoveredAttribute.tableId &&
+        (node.data as AttributeData).attributeId ===
+          hoveredAttribute.attributeId
     );
-    const attribute = table?.attributes.find(
-      (item) => item.id === selectedAttribute.attributeId
-    );
-
-    if (!table || !attribute) return null;
-
-    return { table, attribute };
-  }, [data.tables, selectedAttribute]);
-
-  const attributeLineage = useMemo<{
-    incoming: LineageEdge[];
-    outgoing: LineageEdge[];
-  }>(() => {
-    if (!selectedAttribute) return { incoming: [], outgoing: [] };
-
-    const matches = (endpoint: LineageEndpoint) =>
-      endpoint.systemId === selectedAttribute.systemId &&
-      endpoint.tableId === selectedAttribute.tableId &&
-      endpoint.attributeId === selectedAttribute.attributeId;
-
-    return {
-      incoming: data.lineageEdges.filter((edge) => matches(edge.target)),
-      outgoing: data.lineageEdges.filter((edge) => matches(edge.source)),
-    };
-  }, [data.lineageEdges, selectedAttribute]);
+  }, [graph.nodes, hoveredAttribute]);
 
   const traceTargetResolution = highlight
     ? resolveEndpoint(highlight.target, data)
@@ -1018,6 +1371,9 @@ export default function SystemLineageGraph({
           edgeTypes={edgeTypes}
           onInit={setFlow}
           onNodeClick={handleNodeClick}
+          onNodeMouseEnter={handleNodeMouseEnter}
+          onNodeMouseLeave={handleNodeMouseLeave}
+          onMoveStart={clearHover}
           onEdgeClick={(_, edge) => {
             setSelectedEdgeId(edge.id);
             setSelectedAttribute(null);
@@ -1025,6 +1381,7 @@ export default function SystemLineageGraph({
           onPaneClick={() => {
             setSelectedEdgeId(null);
             setSelectedAttribute(null);
+            clearHover();
             if (highlight) onClearHighlight?.();
           }}
           fitView
@@ -1040,6 +1397,27 @@ export default function SystemLineageGraph({
           <Background color="#e5e2da" gap={22} size={1} />
           <Controls showInteractive={false} position="bottom-left" />
         </ReactFlow>
+
+        {hoveredAttribute &&
+          hoveredNodeVisible &&
+          hoveredAttributeDetails &&
+          hoverPoint && (
+            <AttributeHoverCard
+              data={data}
+              systemLabel={
+                data.systems.find(
+                  (item) => item.id === hoveredAttribute.systemId
+                )?.label ?? hoveredAttribute.systemId
+              }
+              table={hoveredAttributeDetails.table}
+              attribute={hoveredAttributeDetails.attribute}
+              incoming={hoveredAttributeLineage.incoming}
+              outgoing={hoveredAttributeLineage.outgoing}
+              values={endpointValues}
+              x={hoverPoint.x}
+              y={hoverPoint.y}
+            />
+          )}
       </div>
 
       {hasDetails ? (
