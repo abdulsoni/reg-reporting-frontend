@@ -495,6 +495,13 @@ export function buildSystemGraph(
         height: layout.height,
         opacity: dimmed ? 0.35 : 1,
       },
+      /*
+       * Seed the measured size so React Flow reports the graph as initialized
+       * on the first adopt. Re-adopting nodes without it (e.g. after selecting
+       * a column) resets `nodesInitialized` to false, which would keep the
+       * export menu disabled.
+       */
+      measured: { width: layout.width, height: layout.height },
       data: {
         label: layout.system.label,
         description: layout.system.description,
@@ -535,6 +542,7 @@ export function buildSystemGraph(
         height: DEPENDENCY_HEIGHT,
         opacity: dimmed ? 0.35 : 1,
       },
+      measured: { width: DEPENDENCY_WIDTH, height: DEPENDENCY_HEIGHT },
       data: {
         label: dependency.systemName,
         systemName: dependency.systemName,
@@ -612,6 +620,7 @@ export function buildSystemGraph(
           height,
           opacity: dimmed ? 0.35 : 1,
         },
+        measured: { width: TABLE_WIDTH, height },
         data: {
           label: table.name,
           systemId: layout.system.id,
@@ -650,6 +659,7 @@ export function buildSystemGraph(
               height: ATTR_HEIGHT,
               opacity: attributeDimmed ? 0.35 : 1,
             },
+            measured: { width: ATTR_WIDTH, height: ATTR_HEIGHT },
             data: {
               label: attribute.name,
               dataType: attribute.dataType,

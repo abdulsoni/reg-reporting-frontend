@@ -3,7 +3,9 @@
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
@@ -583,9 +585,13 @@ function SideDetailPanel({ title, onClose, children }: DetailPanelProps) {
 }
 
 /** How many relationships to list per direction before collapsing the rest. */
-const HOVER_CARD_LIMIT = 3;
+const DETAILS_CARD_LIMIT = 3;
+/** Approximate card size used to keep it inside the viewport when it opens. */
+const DETAILS_CARD_WIDTH = 372;
+const DETAILS_CARD_HEIGHT = 420;
+const DETAILS_CARD_MARGIN = 12;
 
-type AttributeHoverCardProps = {
+type AttributeDetailsCardProps = {
   data: LineageData;
   systemLabel: string;
   table: LineageTable;
@@ -596,14 +602,15 @@ type AttributeHoverCardProps = {
   values: Map<string, string>;
   x: number;
   y: number;
+  onClose: () => void;
 };
 
 /**
- * Read-only card shown while the pointer rests on an attribute node. It is
- * pointer-events-none and rendered in a portal so it never blocks the graph and
- * closes as soon as the pointer leaves the node.
+ * Details card opened by clicking an attribute node. It is rendered in a portal
+ * so it sits above the graph, and stays put until its own close button is
+ * pressed (or another attribute is clicked).
  */
-function AttributeHoverCard({
+function AttributeDetailsCard({
   data,
   systemLabel,
   table,
@@ -613,7 +620,35 @@ function AttributeHoverCard({
   values,
   x,
   y,
-}: AttributeHoverCardProps) {
+  onClose,
+}: AttributeDetailsCardProps) {
+  const cardRef = useRef<HTMLDivElement | null>(null);
+  const [position, setPosition] = useState({ x, y });
+
+  /* Keep the card fully on screen once its real height is known. */
+  useLayoutEffect(() => {
+    const el = cardRef.current;
+    if (!el) return;
+
+    const rect = el.getBoundingClientRect();
+    const maxLeft = window.innerWidth - rect.width - DETAILS_CARD_MARGIN;
+    const maxTop = window.innerHeight - rect.height - DETAILS_CARD_MARGIN;
+    const next = {
+      x: Math.min(
+        Math.max(DETAILS_CARD_MARGIN, x),
+        Math.max(DETAILS_CARD_MARGIN, maxLeft)
+      ),
+      y: Math.min(
+        Math.max(DETAILS_CARD_MARGIN, y),
+        Math.max(DETAILS_CARD_MARGIN, maxTop)
+      ),
+    };
+
+    setPosition((current) =>
+      current.x === next.x && current.y === next.y ? current : next
+    );
+  }, [x, y]);
+
   const attributeValue =
     values.get(
       endpointKey({
@@ -639,7 +674,7 @@ function AttributeHoverCard({
       );
     }
 
-    const visible = edges.slice(0, HOVER_CARD_LIMIT);
+    const visible = edges.slice(0, DETAILS_CARD_LIMIT);
     const hidden = edges.length - visible.length;
 
     return (
@@ -701,9 +736,11 @@ function AttributeHoverCard({
 
   return createPortal(
     <div
-      role="tooltip"
-      className="pointer-events-none fixed z-50 w-[360px] max-w-[calc(100vw-24px)] rounded-xl border border-slate-200 bg-white p-3 text-left shadow-2xl ring-1 ring-slate-900/5"
-      style={{ left: x, top: y }}
+      ref={cardRef}
+      role="dialog"
+      aria-label={`${table.name}.${attribute.name} details`}
+      className="fixed z-50 max-h-[calc(100vh-24px)] w-[360px] max-w-[calc(100vw-24px)] overflow-y-auto rounded-xl border border-slate-200 bg-white p-3 text-left shadow-2xl ring-1 ring-slate-900/5"
+      style={{ left: position.x, top: position.y }}
     >
       <div className="flex items-start justify-between gap-2">
         <div className="min-w-0">
@@ -715,9 +752,20 @@ function AttributeHoverCard({
           </div>
         </div>
 
-        <span className="shrink-0 rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-600">
-          {attribute.dataType}
-        </span>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="rounded-full bg-slate-100 px-2 py-0.5 font-mono text-[10px] font-semibold text-slate-600">
+            {attribute.dataType}
+          </span>
+
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Close details"
+            className="rounded px-1.5 py-0.5 text-slate-500 transition hover:bg-slate-100"
+          >
+            ✕
+          </button>
+        </div>
       </div>
 
       <div className="mt-2">
@@ -856,7 +904,6 @@ export default function SystemLineageGraph({
   highlight,
   onToggleSystem,
   onToggleTable,
-  onTraceAttribute,
   onClearHighlight,
   showPathDetails = true,
   showEdgeLabels = true,
@@ -867,7 +914,6 @@ export default function SystemLineageGraph({
   highlight?: UpstreamTrace | null;
   onToggleSystem: (systemId: string) => void;
   onToggleTable: (tableId: string) => void;
-  onTraceAttribute?: (target: LineageEndpoint) => void;
   onClearHighlight?: () => void;
   showPathDetails?: boolean;
   /** Hide the "hop · value" text drawn on top of the edges. */
@@ -876,23 +922,20 @@ export default function SystemLineageGraph({
   const [selectedEdgeId, setSelectedEdgeId] = useState<string | null>(null);
   const [selectedAttribute, setSelectedAttribute] =
     useState<SelectedAttribute | null>(null);
-  const [hoveredAttribute, setHoveredAttribute] =
-    useState<SelectedAttribute | null>(null);
-  const [hoverPoint, setHoverPoint] = useState<{ x: number; y: number } | null>(
+  const [popupPoint, setPopupPoint] = useState<{ x: number; y: number } | null>(
     null
   );
   const [flow, setFlow] = useState<ReactFlowInstance | null>(null);
 
-  const clearHover = useCallback(() => {
-    setHoveredAttribute(null);
-    setHoverPoint(null);
+  const closeAttributePopup = useCallback(() => {
+    setSelectedAttribute(null);
+    setPopupPoint(null);
   }, []);
 
   const resetSelection = useCallback(() => {
     setSelectedEdgeId(null);
-    setSelectedAttribute(null);
-    clearHover();
-  }, [clearHover]);
+    closeAttributePopup();
+  }, [closeAttributePopup]);
 
   const handleToggleSystem = useCallback(
     (systemId: string) => {
@@ -1066,69 +1109,34 @@ export default function SystemLineageGraph({
   }, [baseEdges, selectedEdgeId]);
 
   const handleNodeClick = useCallback(
-    (_: React.MouseEvent, node: Node) => {
+    (event: React.MouseEvent, node: Node) => {
       if (node.type !== "attribute") return;
 
       const nodeData = node.data as AttributeData;
       setSelectedEdgeId(null);
-
-      if (onTraceAttribute) {
-        setSelectedAttribute(null);
-        onTraceAttribute({
-          systemId: nodeData.systemId,
-          tableId: nodeData.tableId,
-          attributeId: nodeData.attributeId,
-        });
-        return;
-      }
-
       setSelectedAttribute({
         systemId: nodeData.systemId,
         tableId: nodeData.tableId,
         attributeId: nodeData.attributeId,
       });
-    },
-    [onTraceAttribute]
-  );
-
-  const handleNodeMouseEnter = useCallback(
-    (event: React.MouseEvent, node: Node) => {
-      if (node.type !== "attribute") return;
-
-      const nodeData = node.data as AttributeData;
-      const cardWidth = 372;
-      const cardHeight = 420;
-      const margin = 12;
-
-      setHoveredAttribute({
-        systemId: nodeData.systemId,
-        tableId: nodeData.tableId,
-        attributeId: nodeData.attributeId,
-      });
-      setHoverPoint({
+      setPopupPoint({
         x: Math.max(
-          margin,
-          Math.min(event.clientX + 18, window.innerWidth - cardWidth - margin)
+          DETAILS_CARD_MARGIN,
+          Math.min(
+            event.clientX + 18,
+            window.innerWidth - DETAILS_CARD_WIDTH - DETAILS_CARD_MARGIN
+          )
         ),
         y: Math.max(
-          margin,
+          DETAILS_CARD_MARGIN,
           Math.min(
             event.clientY + 18,
-            window.innerHeight - cardHeight - margin
+            window.innerHeight - DETAILS_CARD_HEIGHT - DETAILS_CARD_MARGIN
           )
         ),
       });
     },
     []
-  );
-
-  const handleNodeMouseLeave = useCallback(
-    (_: React.MouseEvent, node: Node) => {
-      if (node.type !== "attribute") return;
-
-      clearHover();
-    },
-    [clearHover]
   );
 
   const selectedEdgeDetails = useMemo(() => {
@@ -1191,30 +1199,20 @@ export default function SystemLineageGraph({
     [lineageForAttribute, selectedAttribute]
   );
 
-  const hoveredAttributeDetails = useMemo(
-    () => describeAttribute(hoveredAttribute),
-    [describeAttribute, hoveredAttribute]
-  );
-
-  const hoveredAttributeLineage = useMemo(
-    () => lineageForAttribute(hoveredAttribute),
-    [lineageForAttribute, hoveredAttribute]
-  );
-
-  /* Hide the card if the hovered node is no longer on the canvas (e.g. its
+  /* Hide the card if the selected node is no longer on the canvas (e.g. its
    * table was collapsed) without mutating state during render. */
-  const hoveredNodeVisible = useMemo(() => {
-    if (!hoveredAttribute) return false;
+  const selectedNodeVisible = useMemo(() => {
+    if (!selectedAttribute) return false;
 
     return graph.nodes.some(
       (node) =>
         node.type === "attribute" &&
-        (node.data as AttributeData).systemId === hoveredAttribute.systemId &&
-        (node.data as AttributeData).tableId === hoveredAttribute.tableId &&
+        (node.data as AttributeData).systemId === selectedAttribute.systemId &&
+        (node.data as AttributeData).tableId === selectedAttribute.tableId &&
         (node.data as AttributeData).attributeId ===
-          hoveredAttribute.attributeId
+          selectedAttribute.attributeId
     );
-  }, [graph.nodes, hoveredAttribute]);
+  }, [graph.nodes, selectedAttribute]);
 
   const traceTargetResolution = highlight
     ? resolveEndpoint(highlight.target, data)
@@ -1356,7 +1354,7 @@ export default function SystemLineageGraph({
     Math.min(1200, graph.contentHeight + 48)
   );
 
-  const hasDetails = Boolean(selectedEdgeDetails || selectedAttributeDetails || highlight);
+  const hasDetails = Boolean(selectedEdgeDetails || highlight);
 
   return (
     <div
@@ -1371,18 +1369,17 @@ export default function SystemLineageGraph({
           edgeTypes={edgeTypes}
           onInit={setFlow}
           onNodeClick={handleNodeClick}
-          onNodeMouseEnter={handleNodeMouseEnter}
-          onNodeMouseLeave={handleNodeMouseLeave}
-          onMoveStart={clearHover}
           onEdgeClick={(_, edge) => {
             setSelectedEdgeId(edge.id);
-            setSelectedAttribute(null);
           }}
           onPaneClick={() => {
             setSelectedEdgeId(null);
-            setSelectedAttribute(null);
-            clearHover();
-            if (highlight) onClearHighlight?.();
+            /*
+             * Clearing the trace remounts this graph (the parent keys it on the
+             * active trace), which would also dismiss the open column card.
+             * Leave the highlight in place until the card is closed.
+             */
+            if (!selectedAttribute && highlight) onClearHighlight?.();
           }}
           fitView
           fitViewOptions={{ padding: 0.12, minZoom: 0.2, maxZoom: 1.1 }}
@@ -1398,24 +1395,25 @@ export default function SystemLineageGraph({
           <Controls showInteractive={false} position="bottom-left" />
         </ReactFlow>
 
-        {hoveredAttribute &&
-          hoveredNodeVisible &&
-          hoveredAttributeDetails &&
-          hoverPoint && (
-            <AttributeHoverCard
+        {selectedAttribute &&
+          selectedNodeVisible &&
+          selectedAttributeDetails &&
+          popupPoint && (
+            <AttributeDetailsCard
               data={data}
               systemLabel={
                 data.systems.find(
-                  (item) => item.id === hoveredAttribute.systemId
-                )?.label ?? hoveredAttribute.systemId
+                  (item) => item.id === selectedAttribute.systemId
+                )?.label ?? selectedAttribute.systemId
               }
-              table={hoveredAttributeDetails.table}
-              attribute={hoveredAttributeDetails.attribute}
-              incoming={hoveredAttributeLineage.incoming}
-              outgoing={hoveredAttributeLineage.outgoing}
+              table={selectedAttributeDetails.table}
+              attribute={selectedAttributeDetails.attribute}
+              incoming={attributeLineage.incoming}
+              outgoing={attributeLineage.outgoing}
               values={endpointValues}
-              x={hoverPoint.x}
-              y={hoverPoint.y}
+              x={popupPoint.x}
+              y={popupPoint.y}
+              onClose={closeAttributePopup}
             />
           )}
       </div>
@@ -1537,145 +1535,6 @@ export default function SystemLineageGraph({
               </div>
             </div>
           )}
-            </SideDetailPanel>
-          ) : selectedAttributeDetails ? (
-            <SideDetailPanel
-              title="Column details"
-              onClose={() => setSelectedAttribute(null)}
-            >
-          <div className="flex items-center justify-between gap-3">
-            <div className="font-mono font-medium text-ink">
-              {selectedAttributeDetails.table.name}.
-              {selectedAttributeDetails.attribute.name}
-            </div>
-
-            <span className="rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-500">
-              {selectedAttributeDetails.attribute.dataType}
-            </span>
-          </div>
-
-          <div>
-            <div className="text-xs text-slate-500">Transformation</div>
-            <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-slate-100 p-3 text-xs">
-              {selectedAttributeDetails.attribute.transformation ||
-                "Direct source column — no transformation expression."}
-            </pre>
-          </div>
-
-          {(selectedAttributeDetails.attribute.traced ||
-            selectedAttributeDetails.attribute.value !== undefined) && (
-            <div>
-              <div className="text-xs text-slate-500">Traced value</div>
-              <div className="mt-1 space-y-1 rounded-md border border-blue-100 bg-blue-50/60 p-2.5 text-[11px] text-slate-700">
-                <div className="flex items-center justify-between gap-2">
-                  <span>Value</span>
-                  <span className="font-mono text-sm font-bold text-blue-700">
-                    {formatTraceValue(selectedAttributeDetails.attribute.value)}
-                  </span>
-                </div>
-
-                {selectedAttributeDetails.attribute.recordKey && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span>Record key</span>
-                    <span className="font-mono">
-                      {selectedAttributeDetails.attribute.recordKey}
-                    </span>
-                  </div>
-                )}
-
-                {selectedAttributeDetails.attribute.hop && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span>Hop</span>
-                    <span className="font-mono">
-                      {selectedAttributeDetails.attribute.hop}
-                    </span>
-                  </div>
-                )}
-
-                {selectedAttributeDetails.attribute.traceRole && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span>Role</span>
-                    <span className="capitalize">
-                      {selectedAttributeDetails.attribute.traceRole}
-                    </span>
-                  </div>
-                )}
-
-                {selectedAttributeDetails.attribute.traceStatus && (
-                  <div className="flex items-center justify-between gap-2">
-                    <span>Status</span>
-                    <span>{selectedAttributeDetails.attribute.traceStatus}</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
-
-          <div>
-            <div className="text-xs text-slate-500">
-              Incoming sources ({attributeLineage.incoming.length})
-            </div>
-
-            {attributeLineage.incoming.length > 0 ? (
-              <ul className="mt-1 space-y-1.5">
-                {attributeLineage.incoming.map((edge) => (
-                  <li
-                    key={edge.id}
-                    className="rounded-md border border-slate-200 p-2"
-                  >
-                    <div className="font-mono text-xs font-semibold text-slate-800">
-                      {formatEndpoint(
-                        edge.source,
-                        data,
-                        resolveEndpoint(edge.source, data)
-                      )}
-                    </div>
-
-                    <div className="mt-0.5 text-[11px] text-slate-500">
-                      {edge.description}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-[11px] text-slate-500">
-                No incoming sources.
-              </p>
-            )}
-          </div>
-
-          <div>
-            <div className="text-xs text-slate-500">
-              Outgoing targets ({attributeLineage.outgoing.length})
-            </div>
-
-            {attributeLineage.outgoing.length > 0 ? (
-              <ul className="mt-1 space-y-1.5">
-                {attributeLineage.outgoing.map((edge) => (
-                  <li
-                    key={edge.id}
-                    className="rounded-md border border-slate-200 p-2"
-                  >
-                    <div className="font-mono text-xs font-semibold text-slate-800">
-                      {formatEndpoint(
-                        edge.target,
-                        data,
-                        resolveEndpoint(edge.target, data)
-                      )}
-                    </div>
-
-                    <div className="mt-0.5 text-[11px] text-slate-500">
-                      {edge.description}
-                    </div>
-                  </li>
-                ))}
-              </ul>
-            ) : (
-              <p className="mt-1 text-[11px] text-slate-500">
-                No outgoing targets.
-              </p>
-            )}
-          </div>
             </SideDetailPanel>
           ) : showPathDetails && highlight ? (
             <SideDetailPanel

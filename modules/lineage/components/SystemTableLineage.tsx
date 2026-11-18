@@ -19,7 +19,6 @@ import {
   deriveDataTraceExpansion,
 } from "../lib/dataTraceHighlight";
 import {
-  buildAttributeSearchEntry,
   collectUpstreamTrace,
   type AttributeSearchEntry,
   type UpstreamTrace,
@@ -196,15 +195,6 @@ export function SystemLineageView({
     [activateTrace]
   );
 
-  const handleAttributeTrace = useCallback(
-    (target: LineageEndpoint) => {
-      const entry = buildAttributeSearchEntry(data, target);
-      if (!entry) return;
-      activateTrace(target, entry);
-    },
-    [activateTrace, data]
-  );
-
   const clearSearchTrace = useCallback(() => {
     setActiveTrace(null);
   }, []);
@@ -257,7 +247,7 @@ export function SystemLineageView({
 
             <p className="mt-1 text-xs text-slate-500">
               Click a database to expand its tables, then click a table to expand
-              its columns.
+              its columns. Click a column for its details.
             </p>
           </div>
 
@@ -305,7 +295,6 @@ export function SystemLineageView({
           showEdgeLabels={showEdgeLabels}
           onToggleSystem={toggleSystem}
           onToggleTable={toggleTable}
-          onTraceAttribute={handleAttributeTrace}
           onClearHighlight={clearSearchTrace}
         />
       </section>
