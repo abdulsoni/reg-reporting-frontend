@@ -4,9 +4,11 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Loader2, RefreshCw } from "lucide-react";
+import { ReactFlowProvider } from "@xyflow/react";
 
 import DataLineageHeader from "../components/data-lineage/DataLineageHeader";
 import LineageDetailsTable from "../components/data-lineage/LineageDetailsTable";
+import LineageGraphExportMenu from "../components/data-lineage/LineageGraphExportMenu";
 import NextSourceIdentification from "../components/data-lineage/NextSourceIdentification";
 import SelectedDatapointCard from "../components/data-lineage/SelectedDatapointCard";
 import ValueReconciliation from "../components/data-lineage/ValueReconciliation";
@@ -364,40 +366,49 @@ export default function DataLineagePage({
               </div>
             )}
 
-            <LineageDetailsTable
-              title={
-                showSystem
-                  ? "System Details"
-                  : showGraph
-                    ? "Lineage Graph"
-                    : "Data Lineage"
-              }
-              rows={rows}
-              selectedHop={selectedHopId}
-              onRowSelect={setSelectedHopId}
-              onExport={exportCsv}
-              graphContent={
-                showSystem ? (
-                  <SystemDetailsView
-                    rows={rows}
-                    trace={trace}
-                    reconciliation={overallReconciliation}
+            <ReactFlowProvider>
+              <LineageDetailsTable
+                title={
+                  showSystem
+                    ? "System Details"
+                    : showGraph
+                      ? "Lineage Graph"
+                      : "Data Lineage"
+                }
+                rows={rows}
+                selectedHop={selectedHopId}
+                onRowSelect={setSelectedHopId}
+                onExport={exportCsv}
+                headerAction={
+                  showGraph || showSystem ? (
+                    <LineageGraphExportMenu
+                      fileName={trace.datapoint_id}
+                    />
+                  ) : undefined
+                }
+                graphContent={
+                  showSystem ? (
+                    <SystemDetailsView
+                      rows={rows}
+                      trace={trace}
+                      reconciliation={overallReconciliation}
+                    />
+                  ) : showGraph ? (
+                    <EmbeddedGraphPanel
+                      reportName={trace.report_name}
+                      datapointId={trace.datapoint_id}
+                    />
+                  ) : null
+                }
+              >
+                {trace.next_source && (
+                  <NextSourceIdentification
+                    nextSource={trace.next_source}
+                    onIdentify={() => setShowNextSourceConnect(true)}
                   />
-                ) : showGraph ? (
-                  <EmbeddedGraphPanel
-                    reportName={trace.report_name}
-                    datapointId={trace.datapoint_id}
-                  />
-                ) : null
-              }
-            >
-              {trace.next_source && (
-                <NextSourceIdentification
-                  nextSource={trace.next_source}
-                  onIdentify={() => setShowNextSourceConnect(true)}
-                />
-              )}
-            </LineageDetailsTable>
+                )}
+              </LineageDetailsTable>
+            </ReactFlowProvider>
 
             {showNextSourceConnect && (
               <NextSourceConnectPanel

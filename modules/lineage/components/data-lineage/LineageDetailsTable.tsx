@@ -52,6 +52,8 @@ type Props = {
   /** When provided, rendered in place of the details table. */
   graphContent?: ReactNode | null;
   onExport?: () => void;
+  /** Replaces the default Export button in the header. */
+  headerAction?: ReactNode;
 };
 
 export default function LineageDetailsTable({
@@ -62,6 +64,7 @@ export default function LineageDetailsTable({
   title = "Data Lineage",
   graphContent,
   onExport,
+  headerAction,
 }: Props) {
   const handleKeyDown = (
     event: KeyboardEvent<HTMLTableRowElement>,
@@ -79,15 +82,17 @@ export default function LineageDetailsTable({
       <div className="flex items-center gap-3 border-b border-slate-200 px-4 py-3">
         <Database className="text-slate-400" size={20} />
         <h2 className="text-xs font-bold text-ink">{title}</h2>
-        <button
-          type="button"
-          onClick={onExport}
-          style={exportStyle}
-          className="ml-auto inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-ink transition hover:bg-slate-50"
-        >
-          <Download size={13} />
-          Export details
-        </button>
+        {headerAction ?? (
+          <button
+            type="button"
+            onClick={onExport}
+            style={exportStyle}
+            className="ml-auto inline-flex shrink-0 items-center justify-center gap-1.5 whitespace-nowrap rounded-lg border border-slate-300 bg-white px-3 py-2 font-semibold text-ink transition hover:bg-slate-50"
+          >
+            <Download size={13} />
+            Export details
+          </button>
+        )}
       </div>
       {graphContent ? (
         <div className="p-4">{graphContent}</div>
